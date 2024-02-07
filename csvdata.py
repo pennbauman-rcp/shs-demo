@@ -83,26 +83,26 @@ def parse_coord(coord: str) -> tuple[float, float]:
 
 
 
-class BasesData:
+class LocationsData:
     def __init__(self):
-        self.bases = []
+        self.nodes = []
 
     def __str__(self):
         fin = ""
-        for b in self.bases:
+        for b in self.nodes:
             fin += str(b) + "\n"
         return fin[:-1]
 
     # Make iterable
     def __iter__(self):
-        self.iter = self.bases.__iter__()
+        self.iter = self.nodes.__iter__()
         return self.iter
     def __next__(self):
         return self.iter.__next__()
 
     @staticmethod
     def from_csv(filename: str):
-        self = BasesData()
+        self = LocationsData()
         with open(filename, newline='') as csvfile:
             csvreader = csv.reader(csvfile, dialect='excel')
             row_i = 1
@@ -112,13 +112,13 @@ class BasesData:
                     row_i += 1
                     if row[0] != "ICAO":
                         print(row)
-                        raise ValueError("BasesData: CSV Header Invalid")
+                        raise ValueError("LocationsData: CSV Header Invalid")
                     continue
-                self.bases.append(self.Base.from_csv(row))
+                self.nodes.append(self.Node.from_csv(row))
                 row_i += 1
         return self
 
-    class Base:
+    class Node:
         name = ""
         lat = -365
         lon = -365
@@ -128,7 +128,7 @@ class BasesData:
 
         @staticmethod
         def from_csv(row: list[str]):
-            self = BasesData.Base()
+            self = LocationsData.Node()
             self.name = row[0]
             self.lat = dms2float(row[1])
             self.lon = dms2float(row[2])

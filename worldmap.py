@@ -10,7 +10,7 @@ MAP_SCALES = [
     (3600, 1800),
     (1800,  900),
 ]
-BASE_RADIUS = 3
+NODE_RADIUS = 3
 VEHICLE_RADIUS = 5
 LINE_WIDTH = 2
 AIRPLANE_REGEX = re.compile("^(C17|B777)$")
@@ -21,7 +21,7 @@ TRAIN_REGEX = re.compile("^([Tt]rain_(US|EU))$")
 
 # Main map window, contains all map elements
 class WorldMap:
-    bases = []
+    nodes = []
     legs = []
     vehicles = []
     tk = None
@@ -30,12 +30,12 @@ class WorldMap:
     time = 0.0
     end_time = 0.0
 
-    def __init__(self, bases: BasesData = None, routing: RoutingData = None):
+    def __init__(self, nodes: LocationsData = None, routing: RoutingData = None):
         self.coord = WorldCoordinates()
-        if bases:
-            self.bases = []
-            for b in bases:
-                self.bases.append(MapBase(b.name, b.lat, b.lon))
+        if nodes:
+            self.nodes = []
+            for n in nodes:
+                self.nodes.append(MapNode(n.name, n.lat, n.lon))
         if routing:
             self.legs = []
             for l in routing.get_legs():
@@ -50,13 +50,13 @@ class WorldMap:
         self.coord = WorldCoordinates(min_lat, min_lon, 2)
         # print("Cropping world to", self.coord)
 
-    # Get pixel location of a base by name
-    def get_base_px(self, name: str) -> tuple[int, int]:
-        for b in self.bases:
-            if name.split("_")[0] == b.name:
-                b.unhide(self)
-                return self.coord.calc_px(b.lat, b.lon)
-        raise ValueError("Unknown base '%s'" % (name))
+    # Get pixel location of a node by name
+    def get_node_px(self, name: str) -> tuple[int, int]:
+        for n in self.nodes:
+            if name.split("_")[0] == n.name:
+                n.unhide(self)
+                return self.coord.calc_px(n.lat, n.lon)
+        raise ValueError("Unknown node '%s'" % (name))
 
     # Run map display window
     def display(self):
@@ -76,15 +76,15 @@ class WorldMap:
         self.canvas.create_image(self.coord.calc_world_offset_px(), image=self.bg_img, anchor=tkinter.NW)
 
         # Setup overlay items
-        base_count = 0
-        for b in self.bases:
+        node_count = 0
+        for n in self.nodes:
             try:
-                b.display(self)
-                b.hide(self)
-                base_count += 1
+                n.display(self)
+                n.hide(self)
+                node_count += 1
             except:
                 pass
-        print("Bases displayed (%d)" % base_count)
+        print("Nodes displayed (%d)" % node_count)
         for l in self.legs:
             l.display(self)
         print("Legs displayed (%d)" % len(self.legs))
@@ -197,8 +197,8 @@ class WorldClock:
 
 
 
-# Single base; with data and canvas object
-class MapBase:
+# Single location node; with data and canvas object
+class MapNode:
     name = ""
     lat = 0
     lon = 0
@@ -211,8 +211,8 @@ class MapBase:
 
     def display(self, world: WorldMap):
         (x, y) = world.coord.calc_px(self.lat, self.lon)
-        p1 = (x - BASE_RADIUS, y - BASE_RADIUS)
-        p2 = (x + BASE_RADIUS, y + BASE_RADIUS)
+        p1 = (x - NODE_RADIUS, y - NODE_RADIUS)
+        p2 = (x + NODE_RADIUS, y + NODE_RADIUS)
         self.canvas_dot = world.canvas.create_oval(p1, p2, fill="black", outline="black")
 
     def hide(self, world: WorldMap):
@@ -221,19 +221,19 @@ class MapBase:
         world.canvas.itemconfig(self.canvas_dot, state="normal")
 
 
-# Single travel leg; with start base, end base, and canvas object
+# Single travel leg; with start node, end node, and canvas object
 class MapLeg:
-    start_base = ""
-    end_base = ""
+    start_node = ""
+    end_node = ""
     canvas_line = None
 
-    def __init__(self, start_base: str, end_base: str):
-        self.start_base = start_base
-        self.end_base = end_base
+    def __init__(self, start_node: str, end_node: str):
+        self.start_node = start_node
+        self.end_node = end_node
 
     def display(self, world: WorldMap):
-        p1 = world.get_base_px(self.start_base)
-        p2 = world.get_base_px(self.end_base)
+        p1 = world.get_node_px(self.start_node)
+        p2 = world.get_node_px(self.end_node)
         self.canvas_line = world.canvas.create_line(p1, p2, fill="black", width=LINE_WIDTH)
 
 
@@ -267,25 +267,25 @@ class MapVehicle:
         if time > self.moves[-1][0]:
             # Show ending vehicles forever
             if self.moves[-1][0] == world.end_time:
-                return world.get_base_px(self.moves[-1][1])
+                return world.get_node_px(self.moves[-1][1])
             return None
         if time == self.moves[-1][0]:
-            return world.get_base_px(self.moves[-1][1])
+            return world.get_node_px(self.moves[-1][1])
         # Fine current time with moves list
         i = 0
         while i < len(self.moves) - 1:
             if time == self.moves[i][0]:
-                return world.get_base_px(self.moves[i][1])
+                return world.get_node_px(self.moves[i][1])
             if time > self.moves[i][0] and time < self.moves[i + 1][0]:
                 break
             i += 1
-        p1 = world.get_base_px(self.moves[i][1])
+        p1 = world.get_node_px(self.moves[i][1])
         # Check if vehicle isn't moving
         if self.moves[i][0] == self.moves[i + 1][0]:
             return p1
         if self.moves[i][1] == self.moves[i + 1][1]:
             return p1
-        p2 = world.get_base_px(self.moves[i + 1][1])
+        p2 = world.get_node_px(self.moves[i + 1][1])
         # Calculate postion between start and end points
         ratio = (time - self.moves[i][0])/(self.moves[i + 1][0] - self.moves[i][0])
         x = int(p1[0] + (p2[0] - p1[0])*ratio)
