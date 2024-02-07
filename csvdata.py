@@ -2,8 +2,85 @@ import csv
 import re
 
 
-MOVE_REGEX = re.compile("leaving from [ a-zA-Z]+; (driv|sail|mov|fly)ing to [ a-zA-Z]+")
-ARRIVE_REGEX = re.compile("arriving at [ a-zA-Z]+")
+MOVE_REGEX = re.compile("[Ll]eaving from [-_ a-zA-Z]+, (driv|sail|mov|fly|go)ing to [-_ a-zA-Z]+")
+DIRECTION_SIGN_KEY = {
+    "N":  1, "n":  1,
+    "S": -1, "s": -1,
+    "E":  1, "e":  1,
+    "W": -1, "w": -1,
+}
+
+# Convert degrees minutes seconds notation to float degrees
+def dms2float(dms: str) -> float:
+    state = 0
+    flip = 0
+    degrees = 0
+    minutes = 0
+    seconds = 0
+
+    # Parse direction letter (eg N,S,E,W)
+    current = dms.strip()
+    if current[0].isalpha():
+        flip = DIRECTION_SIGN_KEY[current[0]]
+        current = current[1:]
+    elif current[-1].isalpha():
+        flip = DIRECTION_SIGN_KEY[current[-1]]
+        current = current[:-1]
+    elif current[0] == "-":
+        flip = -1
+        current = current[1:]
+    else:
+        flip = 1
+    # Parse each section in order
+    i = 0
+    while len(current) > 0:
+        # Degrees
+        if state == 0:
+            if i == len(current):
+                degrees = float(current)
+                break
+            elif current[i] in "°*":
+                degrees = float(current[:i])
+                current = current[i + 1:].strip()
+                state = 1
+                i = 0
+                continue
+        # Minutes
+        elif state == 1:
+            if i == len(current):
+                minutes = float(current)
+                break
+            elif current[i] in "′'":
+                minutes = float(current[:i])
+                current = current[i + 1:].strip()
+                state = 2
+                i = 0
+                continue
+        # Seconds
+        elif state == 2:
+            if i == len(current):
+                seconds = float(current)
+                break
+            elif current[i] in "″\"":
+                seconds = float(current[:i])
+                current = current[i + 1:].strip()
+                state = 2
+                i = 0
+                continue
+        # Check for invalid characters
+        if not (current[i].isdigit() or current[i] == "."):
+            print(state, i, current, current[i])
+            raise ValueError("Invalid degree minute second value '%s'" % (dms))
+        i += 1
+    return flip * (degrees + (minutes / 60) + (seconds / 3600))
+
+def parse_coord(coord: str) -> tuple[float, float]:
+    if "/" in coord:
+        c = "/"
+    else:
+        c = ","
+    return (dms2float(coord.split(c)[0]), dms2float(coord.split(c)[1]))
+
 
 
 class BasesData:
@@ -33,7 +110,7 @@ class BasesData:
                 # Check header row
                 if row_i == 1:
                     row_i += 1
-                    if row[1] != "base name":
+                    if row[0] != "ICAO":
                         print(row)
                         raise ValueError("BasesData: CSV Header Invalid")
                     continue
@@ -52,9 +129,9 @@ class BasesData:
         @staticmethod
         def from_csv(row: list[str]):
             self = BasesData.Base()
-            self.name = row[1]
-            self.lat = float(row[2])
-            self.lon = float(row[3])
+            self.name = row[0]
+            self.lat = dms2float(row[1])
+            self.lon = dms2float(row[2])
             return self
 
 
@@ -98,16 +175,16 @@ class RoutingData:
         ret = []
         for e in self.event_log:
             if MOVE_REGEX.match(e.event):
-                start = e.event.split(";")[0][13:]
+                start = e.event.split(",")[0][13:]
                 i = 0
                 spaces = 0
-                for c in e.event.split(";")[1]:
+                for c in e.event.split(",")[1]:
                     if c == " ":
                         spaces += 1
                     i += 1
                     if spaces == 3:
                         break
-                end = e.event.split(";")[1][i:]
+                end = e.event.split(",")[1][i:]
                 ret.append((start, end))
         return ret
 
