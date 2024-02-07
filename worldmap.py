@@ -1,5 +1,8 @@
+import re
 import tkinter
+
 from csvdata import *
+
 
 MAP_FILE_FMT = "files/equirectangular_earth_map_%04dx%04d.png"
 MAP_SCALES = [
@@ -7,8 +10,13 @@ MAP_SCALES = [
     (3600, 1800),
     (1800,  900),
 ]
-DOT_RADIUS = 8
+BASE_RADIUS = 3
+VEHICLE_RADIUS = 5
 LINE_WIDTH = 2
+AIRPLANE_REGEX = re.compile("^(C17|B777)$")
+SHIP_REGEX = re.compile("^(LMSR)$")
+TRUCK_REGEX = re.compile("^([Tt]ruck_(US|EU))$")
+TRAIN_REGEX = re.compile("^([Tt]rain_(US|EU))$")
 
 
 # Main map window, contains all map elements
@@ -34,7 +42,7 @@ class WorldMap:
                 self.legs.append(MapLeg(l[0], l[1]))
             self.vehicles = []
             for v in routing.get_vehicles():
-                self.vehicles.append(MapVehicle(v.model, v.moves))
+                self.vehicles.append(MapVehicle(v.vehicle_id, v.model, v.moves))
             self.end_time = routing.get_end_time()
 
     # Crop in map to show 1/4 of earth
@@ -45,7 +53,8 @@ class WorldMap:
     # Get pixel location of a base by name
     def get_base_px(self, name: str) -> tuple[int, int]:
         for b in self.bases:
-            if name == b.name:
+            if name.split("_")[0] == b.name:
+                b.unhide(self)
                 return self.coord.calc_px(b.lat, b.lon)
         raise ValueError("Unknown base '%s'" % (name))
 
@@ -67,27 +76,38 @@ class WorldMap:
         self.canvas.create_image(self.coord.calc_world_offset_px(), image=self.bg_img, anchor=tkinter.NW)
 
         # Setup overlay items
+        base_count = 0
         for b in self.bases:
-            b.display(self)
+            try:
+                b.display(self)
+                b.hide(self)
+                base_count += 1
+            except:
+                pass
+        print("Bases displayed (%d)" % base_count)
         for l in self.legs:
             l.display(self)
+        print("Legs displayed (%d)" % len(self.legs))
 
         # Setup vehicles
         for v in self.vehicles:
             v.display(self)
+        print("Vehicles displayed (%d)" % len(self.vehicles))
 
         # Run animation
         self.canvas.pack()
-        self.tk.after(10, self.step)
+        self.tk.after(20, self.step)
+        print("Running animation (T0 to T%f)" % (self.end_time))
         self.tk.mainloop()
 
     # Step animation
     def step(self):
-        self.time += 0.01
+        self.time += 0.05
         for v in self.vehicles:
             v.step(self)
         if self.time < self.end_time:
             self.tk.after(10, self.step)
+        print(self.time)
 
 
 
@@ -159,6 +179,7 @@ class WorldCoordinates:
         return (x, y)
 
 
+
 # Single base; with data and canvas object
 class MapBase:
     name = ""
@@ -173,9 +194,14 @@ class MapBase:
 
     def display(self, world: WorldMap):
         (x, y) = world.coord.calc_px(self.lat, self.lon)
-        p1 = (x - DOT_RADIUS, y - DOT_RADIUS)
-        p2 = (x + DOT_RADIUS, y + DOT_RADIUS)
-        self.canvas_dot = world.canvas.create_oval(p1, p2, fill="red", outline="red")
+        p1 = (x - BASE_RADIUS, y - BASE_RADIUS)
+        p2 = (x + BASE_RADIUS, y + BASE_RADIUS)
+        self.canvas_dot = world.canvas.create_oval(p1, p2, fill="black", outline="black")
+
+    def hide(self, world: WorldMap):
+        world.canvas.itemconfig(self.canvas_dot, state="hidden")
+    def unhide(self, world: WorldMap):
+        world.canvas.itemconfig(self.canvas_dot, state="normal")
 
 
 # Single travel leg; with start base, end base, and canvas object
@@ -191,18 +217,30 @@ class MapLeg:
     def display(self, world: WorldMap):
         p1 = world.get_base_px(self.start_base)
         p2 = world.get_base_px(self.end_base)
-        self.canvas_line = world.canvas.create_line(p1, p2, fill="red", width=LINE_WIDTH)
+        self.canvas_line = world.canvas.create_line(p1, p2, fill="black", width=LINE_WIDTH)
 
 
 # Single vehicle; with model, movement over time, and canvas object
 class MapVehicle:
+    vehicle_id = ""
     model = ""
     moves = []
     canvas_icon = None
 
-    def __init__(self, model: str, moves: list[tuple[float, str]]):
+    def __init__(self, vehicle_id: str, model: str, moves: list[tuple[float, str]]):
+        self.vehicle_id = vehicle_id
         self.model = model
         self.moves = moves
+        if AIRPLANE_REGEX.match(model):
+            self.color = "orange"
+        elif SHIP_REGEX.match(model):
+            self.color = "red"
+        elif TRUCK_REGEX.match(model):
+            self.color = "green"
+        elif TRAIN_REGEX.match(model):
+            self.color = "purple"
+        else:
+            raise ValueError("Unknown model '%s'" % model)
 
     # Get vehicle location at a given time, return None if vehicle is out of use
     def get_location_at(self, time: float, world: WorldMap) -> tuple[int, int]:
@@ -244,18 +282,18 @@ class MapVehicle:
         loc = self.get_location_at(0.0, world)
         if loc:
             (x, y) = loc
-            p1 = (x - DOT_RADIUS, y - DOT_RADIUS)
-            p2 = (x + DOT_RADIUS, y + DOT_RADIUS)
-            self.canvas_icon = world.canvas.create_oval(p1, p2, fill="black", outline="black")
+            p1 = (x - VEHICLE_RADIUS, y - VEHICLE_RADIUS)
+            p2 = (x + VEHICLE_RADIUS, y + VEHICLE_RADIUS)
+            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.color, outline=self.color)
 
     # Update vehicle on canvas for current time
     def step(self, world: WorldMap):
         loc = self.get_location_at(world.time, world)
         if loc:
             (x, y) = loc
-            p1 = (x - DOT_RADIUS, y - DOT_RADIUS)
-            p2 = (x + DOT_RADIUS, y + DOT_RADIUS)
+            p1 = (x - VEHICLE_RADIUS, y - VEHICLE_RADIUS)
+            p2 = (x + VEHICLE_RADIUS, y + VEHICLE_RADIUS)
             world.canvas.delete(self.canvas_icon)
-            self.canvas_icon = world.canvas.create_oval(p1, p2, fill="black", outline="black")
+            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.color, outline=self.color)
         else:
             world.canvas.delete(self.canvas_icon)
