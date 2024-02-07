@@ -94,20 +94,24 @@ class WorldMap:
             v.display(self)
         print("Vehicles displayed (%d)" % len(self.vehicles))
 
+        self.clock = WorldClock()
+        self.clock.display(self)
+
         # Run animation
         self.canvas.pack()
         self.tk.after(20, self.step)
         print("Running animation (T0 to T%f)" % (self.end_time))
         self.tk.mainloop()
+        print("Ended animation T%f" % self.time)
 
     # Step animation
     def step(self):
         self.time += 0.05
         for v in self.vehicles:
             v.step(self)
+        self.clock.step(self)
         if self.time < self.end_time:
             self.tk.after(10, self.step)
-        print(self.time)
 
 
 
@@ -177,6 +181,19 @@ class WorldCoordinates:
         y = (90 - self.min_lat) * self.px_height / (self.max_lat - self.min_lat)
         y = self.px_height - y
         return (x, y)
+
+
+# Clock for the corner of the map
+class WorldClock:
+    def display(self, world: WorldMap):
+        lat = world.coord.min_lat + (world.coord.max_lat - world.coord.min_lat)/36
+        lon = world.coord.max_lon - (world.coord.max_lat - world.coord.min_lat)/24
+        self.x, self.y = world.coord.calc_px(lat, lon)
+        self.canvas_text = world.canvas.create_text(self.x, self.y, text="T%.3f" % 0.0)
+
+    def step(self, world: WorldMap):
+        world.canvas.delete(self.canvas_text)
+        self.canvas_text = world.canvas.create_text(self.x, self.y, text="T%.3f" % world.time)
 
 
 
