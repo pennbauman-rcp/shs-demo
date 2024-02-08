@@ -6,13 +6,12 @@ from csvdata import *
 
 MAP_FILE_FMT = "files/equirectangular_earth_map_%04dx%04d.png"
 MAP_SCALES = [
-    (7200, 3600),
-    (3600, 1800),
-    (1800,  900),
+    # px_width, px_width, node_radius, line_width, vehicle_radius
+    (7200, 3600, 12, 8, 20),
+    (3600, 1800,  6, 4, 10),
+    (1800,  900,  3, 2,  5),
 ]
-NODE_RADIUS = 3
-VEHICLE_RADIUS = 5
-LINE_WIDTH = 2
+NODE_COLOR = "black"
 AIRPLANE_REGEX = re.compile("^(C17|B777)$")
 SHIP_REGEX = re.compile("^(LMSR)$")
 TRUCK_REGEX = re.compile("^([Tt]ruck_(US|EU))$")
@@ -48,7 +47,7 @@ class WorldMap:
     # Crop in map to show 1/4 of earth
     def crop(self, min_lat: int, min_lon: int):
         self.coord = WorldCoordinates(min_lat, min_lon, 2)
-        # print("Cropping world to", self.coord)
+        print("Cropping world to", self.coord)
 
     # Get pixel location of a node by name
     def get_node_px(self, name: str) -> tuple[int, int]:
@@ -110,7 +109,7 @@ class WorldMap:
         for v in self.vehicles:
             v.step(self)
         self.clock.step(self)
-        if self.time < self.end_time:
+        if self.time <= self.end_time:
             self.tk.after(10, self.step)
 
 
@@ -124,6 +123,9 @@ class WorldCoordinates:
     zoom = 1
     px_width = None
     px_height = None
+    node_radius = 3
+    vehicle_radius = 5
+    line_width = 2
 
     def __init__(self, min_lat: int = -90, min_lon: int = -180, zoom: int = 1):
         if min_lat < self.min_lat:
@@ -153,6 +155,9 @@ class WorldCoordinates:
             if (scale[0] < max_width) and (scale[1] < max_height):
                 self.px_width = scale[0]
                 self.px_height = scale[1]
+                self.node_radius = scale[2]
+                self.line_width = scale[3]
+                self.vehicle_radius = scale[4]
                 return
         raise ValueError("Unsupported screen resolution %dx%d" % (max_width, max_height))
 
@@ -182,18 +187,16 @@ class WorldCoordinates:
         y = self.px_height - y
         return (x, y)
 
-
 # Clock for the corner of the map
 class WorldClock:
     def display(self, world: WorldMap):
         lat = world.coord.min_lat + (world.coord.max_lat - world.coord.min_lat)/36
         lon = world.coord.max_lon - (world.coord.max_lat - world.coord.min_lat)/24
         self.x, self.y = world.coord.calc_px(lat, lon)
-        self.canvas_text = world.canvas.create_text(self.x, self.y, text="T%.3f" % 0.0)
+        self.canvas_text = world.canvas.create_text(self.x, self.y, fill=NODE_COLOR, text="T%.3f" % 0.0)
 
     def step(self, world: WorldMap):
-        world.canvas.delete(self.canvas_text)
-        self.canvas_text = world.canvas.create_text(self.x, self.y, text="T%.3f" % world.time)
+        world.canvas.itemconfig(self.canvas_text, text="T%.3f" % world.time)
 
 
 
@@ -211,9 +214,9 @@ class MapNode:
 
     def display(self, world: WorldMap):
         (x, y) = world.coord.calc_px(self.lat, self.lon)
-        p1 = (x - NODE_RADIUS, y - NODE_RADIUS)
-        p2 = (x + NODE_RADIUS, y + NODE_RADIUS)
-        self.canvas_dot = world.canvas.create_oval(p1, p2, fill="black", outline="black")
+        p1 = (x - world.coord.node_radius, y - world.coord.node_radius)
+        p2 = (x + world.coord.node_radius, y + world.coord.node_radius)
+        self.canvas_dot = world.canvas.create_oval(p1, p2, fill=NODE_COLOR, outline=NODE_COLOR)
 
     def hide(self, world: WorldMap):
         world.canvas.itemconfig(self.canvas_dot, state="hidden")
@@ -234,7 +237,7 @@ class MapLeg:
     def display(self, world: WorldMap):
         p1 = world.get_node_px(self.start_node)
         p2 = world.get_node_px(self.end_node)
-        self.canvas_line = world.canvas.create_line(p1, p2, fill="black", width=LINE_WIDTH)
+        self.canvas_line = world.canvas.create_line(p1, p2, fill=NODE_COLOR, width=world.coord.line_width)
 
 
 # Single vehicle; with model, movement over time, and canvas object
@@ -299,8 +302,8 @@ class MapVehicle:
         loc = self.get_location_at(0.0, world)
         if loc:
             (x, y) = loc
-            p1 = (x - VEHICLE_RADIUS, y - VEHICLE_RADIUS)
-            p2 = (x + VEHICLE_RADIUS, y + VEHICLE_RADIUS)
+            p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
+            p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
             self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.color, outline=self.color)
 
     # Update vehicle on canvas for current time
@@ -308,8 +311,8 @@ class MapVehicle:
         loc = self.get_location_at(world.time, world)
         if loc:
             (x, y) = loc
-            p1 = (x - VEHICLE_RADIUS, y - VEHICLE_RADIUS)
-            p2 = (x + VEHICLE_RADIUS, y + VEHICLE_RADIUS)
+            p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
+            p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
             world.canvas.delete(self.canvas_icon)
             self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.color, outline=self.color)
         else:
