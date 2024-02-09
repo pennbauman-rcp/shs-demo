@@ -1,3 +1,4 @@
+import sys
 import re
 import tkinter
 
@@ -47,7 +48,7 @@ class WorldMap:
     # Crop in map to show 1/4 of earth
     def crop(self, min_lat: int, min_lon: int):
         self.coord = WorldCoordinates(min_lat, min_lon, 2)
-        print("Cropping world to", self.coord)
+        # print("Cropping world to", self.coord)
 
     # Get pixel location of a node by name
     def get_node_px(self, name: str) -> tuple[int, int]:
@@ -58,7 +59,13 @@ class WorldMap:
         raise ValueError("Unknown node '%s'" % (name))
 
     # Run map display window
-    def display(self):
+    def run(self, speed: int, verbose: bool = False):
+        self.verbose = verbose
+        if 100 % speed != 0:
+            print("ERROR: Invalid speed '%s' must be a factor of 100" % speed)
+            sys.exit(1)
+        self.freq = int(100/speed)
+
         self.tk = tkinter.Tk()
         self.tk.title("SHS Demo")
         self.tk.configure(bg="black")
@@ -73,6 +80,10 @@ class WorldMap:
         bg_img_file = MAP_FILE_FMT % (img_width, img_height)
         self.bg_img = tkinter.PhotoImage(file=bg_img_file)
         self.canvas.create_image(self.coord.calc_world_offset_px(), image=self.bg_img, anchor=tkinter.NW)
+        if verbose:
+            center_lat = self.coord.min_lat + (self.coord.max_lat - self.coord.min_lat)/2
+            center_lon = self.coord.min_lon + (self.coord.max_lon - self.coord.min_lon)/2
+            print("Cropping map to center on (%d, %d)" % (center_lat, center_lon))
 
         # Setup overlay items
         node_count = 0
@@ -83,25 +94,31 @@ class WorldMap:
                 node_count += 1
             except:
                 pass
-        print("Nodes displayed (%d)" % node_count)
+        if verbose:
+            print("Nodes displayed (%d)" % node_count)
         for l in self.legs:
             l.display(self)
-        print("Legs displayed (%d)" % len(self.legs))
+        if verbose:
+            print("Legs displayed (%d)" % len(self.legs))
 
         # Setup vehicles
         for v in self.vehicles:
             v.display(self)
-        print("Vehicles displayed (%d)" % len(self.vehicles))
+        if verbose:
+            print("Vehicles displayed (%d)" % len(self.vehicles))
 
         self.clock = WorldClock()
         self.clock.display(self)
 
         # Run animation
         self.canvas.pack()
-        self.tk.after(20, self.step)
-        print("Running animation (T0 to T%f)" % (self.end_time))
+        self.tk.after(self.freq, self.step)
+        if verbose:
+            print("Running animation (T0 to T%.3f)" % (self.end_time))
         self.tk.mainloop()
-        print("Ended animation T%f" % self.time)
+        if self.verbose:
+            if self.time < self.end_time:
+                print("Ended animation (T%.3f)" % self.time)
 
     # Step animation
     def step(self):
@@ -110,7 +127,10 @@ class WorldMap:
             v.step(self)
         self.clock.step(self)
         if self.time <= self.end_time:
-            self.tk.after(10, self.step)
+            self.tk.after(self.freq, self.step)
+        else:
+            if self.verbose:
+                print("Finished animation (T%.3f)" % self.time)
 
 
 

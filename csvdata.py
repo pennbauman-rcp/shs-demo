@@ -1,3 +1,4 @@
+import sys
 import csv
 import re
 
@@ -69,8 +70,8 @@ def dms2float(dms: str) -> float:
                 continue
         # Check for invalid characters
         if not (current[i].isdigit() or current[i] == "."):
-            print(state, i, current, current[i])
-            raise ValueError("Invalid degree minute second value '%s'" % (dms))
+            print("ERROR: Invalid degree minute second value '%s'" % (dms))
+            sys.exit(1)
         i += 1
     return flip * (degrees + (minutes / 60) + (seconds / 3600))
 
@@ -101,7 +102,9 @@ class LocationsData:
         return self.iter.__next__()
 
     @staticmethod
-    def from_csv(filename: str):
+    def from_csv(filename: str, verbose: bool = False):
+        if verbose:
+            print("Reading locations from CSV (%s)" % filename)
         self = LocationsData()
         with open(filename, newline='') as csvfile:
             csvreader = csv.reader(csvfile, dialect='excel')
@@ -111,8 +114,9 @@ class LocationsData:
                 if row_i == 1:
                     row_i += 1
                     if row[0] != "ICAO":
+                        print("ERROR: Invalid CSV header for locations")
                         print(row)
-                        raise ValueError("LocationsData: CSV Header Invalid")
+                        sys.exit(1)
                     continue
                 self.nodes.append(self.Node.from_csv(row))
                 row_i += 1
@@ -154,7 +158,9 @@ class RoutingData:
         return self.iter.__next__()
 
     @staticmethod
-    def from_csv(filename: str):
+    def from_csv(filename: str, verbose: bool = False):
+        if verbose:
+            print("Reading mission log from CSV (%s)" % filename)
         self = RoutingData()
         with open(filename, newline='') as csvfile:
             csvreader = csv.reader(csvfile, dialect='excel')
@@ -164,8 +170,9 @@ class RoutingData:
                 if row_i == 1:
                     row_i += 1
                     if row[1] != "vehicle id":
+                        print("ERROR: Invalid CSV header for mission log")
                         print(row)
-                        raise ValueError("RoutingData: CSV Header Invalid")
+                        sys.exit(1)
                     continue
                 self.event_log.append(self.RoutingEvent.from_csv(row))
                 row_i += 1
