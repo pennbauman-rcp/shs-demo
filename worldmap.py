@@ -90,7 +90,8 @@ class WorldMap:
         for n in self.nodes:
             try:
                 n.display(self)
-                n.hide(self)
+                if len(self.legs) > 0:
+                    n.hide(self)
                 node_count += 1
             except:
                 pass
@@ -109,10 +110,12 @@ class WorldMap:
 
         self.clock = WorldClock()
         self.clock.display(self)
+        self.key = VehicleKey()
+        self.key.display(self)
 
         # Run animation
         self.canvas.pack()
-        self.tk.after(self.freq, self.step)
+        self.tk.after(0, self.step)
         if verbose:
             print("Running animation (T0 to T%.3f)" % (self.end_time))
         self.tk.mainloop()
@@ -122,10 +125,11 @@ class WorldMap:
 
     # Step animation
     def step(self):
-        self.time += 0.05
         for v in self.vehicles:
             v.step(self)
         self.clock.step(self)
+
+        self.time += 0.05
         if self.time <= self.end_time:
             self.tk.after(self.freq, self.step)
         else:
@@ -207,16 +211,40 @@ class WorldCoordinates:
         y = self.px_height - y
         return (x, y)
 
+    def calc_percent_px(self, lat_percent: float, lon_percent: float) -> tuple[int, int]:
+        if not (self.px_width and self.px_height):
+            raise ValueError("Pixels must be set before they can be calculated")
+        x = (self.px_width * lat_percent) / 100
+        y = (self.px_height * lon_percent) / 100
+        return (int(x), int(y))
+
 # Clock for the corner of the map
 class WorldClock:
     def display(self, world: WorldMap):
-        lat = world.coord.min_lat + (world.coord.max_lat - world.coord.min_lat)/36
-        lon = world.coord.max_lon - (world.coord.max_lat - world.coord.min_lat)/24
-        self.x, self.y = world.coord.calc_px(lat, lon)
-        self.canvas_text = world.canvas.create_text(self.x, self.y, fill=NODE_COLOR, text="T%.3f" % 0.0)
+        x, y = world.coord.calc_percent_px(99, 98)
+        self.canvas_text = world.canvas.create_text(x, y, fill=NODE_COLOR, text="T%.3f" % 0.0, anchor=tkinter.SE)
 
     def step(self, world: WorldMap):
         world.canvas.itemconfig(self.canvas_text, text="T%.3f" % world.time)
+
+# Key for vehicle types
+class VehicleKey:
+    def display(self, world: WorldMap):
+        vehicles = ["Truck", "Train", "Ship", "Airplane"]
+        colors = ["green", "purple", "red", "orange"]
+        positions = [
+            world.coord.calc_percent_px(1, 98),
+            world.coord.calc_percent_px(1, 96),
+            world.coord.calc_percent_px(1, 94),
+            world.coord.calc_percent_px(1, 92),
+        ]
+        self.canvas_dots = [None] * 4
+        self.canvas_texts = [None] * 4
+        for i in range(0, 4):
+            p1 = (positions[i][0] - world.coord.vehicle_radius, positions[i][1] - world.coord.vehicle_radius)
+            p2 = (positions[i][0] + world.coord.vehicle_radius, positions[i][1] + world.coord.vehicle_radius)
+            self.canvas_dots[i] = world.canvas.create_oval(p1, p2, fill=colors[i], outline=colors[i])
+            self.canvas_texts[i] = world.canvas.create_text(positions[i][0] + world.coord.vehicle_radius * 3, positions[i][1], fill=NODE_COLOR, text=vehicles[i], anchor=tkinter.W)
 
 
 
