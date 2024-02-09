@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(prog='SHS Demo')
 parser.add_argument("-n", "--nodes", default="data/airports_icao.csv", help="CSV file containing location node definitions")
 parser.add_argument("-l", "--mission-log", help="CSV file containing mission events")
 parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed information")
-parser.add_argument("-s", "--speed", type=int, default=100, help="Animation speed, must be a factor of 100 (default: 10)")
+parser.add_argument("-s", "--speed", type=int, default=1, help="Animation speed, a integer between 1 and 20 ")
 
 args = parser.parse_args()
 

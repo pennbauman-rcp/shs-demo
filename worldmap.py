@@ -1,6 +1,7 @@
 import sys
 import re
 import tkinter
+from tkinter import ttk
 
 from csvdata import *
 
@@ -29,6 +30,8 @@ class WorldMap:
     bg_img = None
     time = 0.0
     end_time = 0.0
+    paused = False
+    speed = 1
 
     def __init__(self, nodes: LocationsData = None, routing: RoutingData = None):
         self.coord = WorldCoordinates()
@@ -61,20 +64,37 @@ class WorldMap:
     # Run map display window
     def run(self, speed: int, verbose: bool = False):
         self.verbose = verbose
-        if 100 % speed != 0:
-            print("ERROR: Invalid speed '%s' must be a factor of 100" % speed)
-            sys.exit(1)
-        self.freq = int(100/speed)
+        if speed > 20:
+            if speed > 100:
+                print("ERROR: High speed '%s'" % speed)
+                sys.exit(1)
+            print("WARNING: High speed '%s'" % speed)
+        self.speed = speed
 
         self.tk = tkinter.Tk()
         self.tk.title("SHS Demo")
         self.tk.configure(bg="black")
+        self.tk.grid()
         self.coord.set_px(self.tk.winfo_screenwidth(), self.tk.winfo_screenheight())
         self.tk.minsize(self.coord.px_width, self.coord.px_height)
         # print("Displaying World, (0, 0) is", self.coord.calc_px(0, 0))
 
+        # Create toolbar
+        self.toolbar = ttk.Frame(self.tk, padding=0)
+        self.toolbar.grid()
+        self.toolbar.grid(column=0, row=0)
+        ttk.Button(self.toolbar, text="Quit", command=self.tk.destroy).grid(column=0, row=0)
+        ttk.Button(self.toolbar, text="Pause", command=self.pause).grid(column=1, row=0)
+        ttk.Button(self.toolbar, text="1x Speed", command=lambda: self.set_speed(1)).grid(column=2, row=0)
+        ttk.Button(self.toolbar, text="2x Speed", command=lambda: self.set_speed(2)).grid(column=3, row=0)
+        ttk.Button(self.toolbar, text="4x Speed", command=lambda: self.set_speed(4)).grid(column=4, row=0)
+        ttk.Button(self.toolbar, text="8x Speed", command=lambda: self.set_speed(8)).grid(column=5, row=0)
+        ttk.Button(self.toolbar, text="16x Speed", command=lambda: self.set_speed(16)).grid(column=6, row=0)
+
+
         # Setup canvas with background
         self.canvas = tkinter.Canvas(self.tk, bg="black", height=self.coord.px_height, width=self.coord.px_width, confine=False)
+        self.canvas.grid(column=0, row=1)
         img_width = self.coord.px_width * self.coord.zoom
         img_height = self.coord.px_height * self.coord.zoom
         bg_img_file = MAP_FILE_FMT % (img_width, img_height)
@@ -108,13 +128,13 @@ class WorldMap:
         if verbose:
             print("Vehicles displayed (%d)" % len(self.vehicles))
 
+        # Add map decorations
         self.clock = WorldClock()
         self.clock.display(self)
         self.key = VehicleKey()
         self.key.display(self)
 
         # Run animation
-        self.canvas.pack()
         self.tk.after(0, self.step)
         if verbose:
             print("Running animation (T0 to T%.3f)" % (self.end_time))
@@ -125,17 +145,26 @@ class WorldMap:
 
     # Step animation
     def step(self):
+        if self.paused:
+            self.tk.after(10, self.step)
+            return
         for v in self.vehicles:
             v.step(self)
         self.clock.step(self)
 
-        self.time += 0.05
+        self.time += 0.05 * self.speed
         if self.time <= self.end_time:
-            self.tk.after(self.freq, self.step)
+            self.tk.after(10, self.step)
         else:
             if self.verbose:
                 print("Finished animation (T%.3f)" % self.time)
 
+    def pause(self):
+        self.paused = True
+
+    def set_speed(self, speed: int):
+        self.paused = False
+        self.speed = speed
 
 
 # Latitude/Longitude to Pixel converter class
@@ -217,6 +246,7 @@ class WorldCoordinates:
         x = (self.px_width * lat_percent) / 100
         y = (self.px_height * lon_percent) / 100
         return (int(x), int(y))
+
 
 # Clock for the corner of the map
 class WorldClock:
@@ -304,7 +334,7 @@ class MapLeg:
 class MapVehicle:
     vehicle_id = ""
     model = ""
-    moves = []
+    moves = [] # (time: float, loc: str)
     canvas_icon = None
 
     def __init__(self, vehicle_id: str, model: str, moves: list[tuple[float, str]]):
@@ -313,35 +343,38 @@ class MapVehicle:
         self.moves = moves
         self.kind = VehicleKind(model)
 
-    # Get vehicle location at a given time, return None if vehicle is out of use
-    def get_location_at(self, time: float, world: WorldMap) -> tuple[int, int]:
-        # Check if vehicle should be hidden
+    # Calculate index of move at give time
+    def _index_at_time(self, time: float) -> int:
         if time < self.moves[0][0]:
-            return None
-        if time > self.moves[-1][0]:
-            # Show ending vehicles forever
-            if self.moves[-1][0] == world.end_time:
-                return world.get_node_px(self.moves[-1][1])
-            return None
-        if time == self.moves[-1][0]:
-            return world.get_node_px(self.moves[-1][1])
-        # Fine current time with moves list
+            return -1
+        if time >= self.moves[-1][0]:
+            return len(self.moves) - 1
         i = 0
         while i < len(self.moves) - 1:
             if time == self.moves[i][0]:
-                return world.get_node_px(self.moves[i][1])
+                break
             if time > self.moves[i][0] and time < self.moves[i + 1][0]:
                 break
             i += 1
-        p1 = world.get_node_px(self.moves[i][1])
+        return i
+
+    # Get vehicle location at a given time, return None if vehicle is out of use
+    def get_location_at(self, time: float, world: WorldMap) -> tuple[int, int]:
+        index = self._index_at_time(time)
+        # Check if vehicle is before or after its moves
+        if index == -1:
+            return world.get_node_px(self.moves[0][1])
+        if index == len(self.moves) - 1:
+            return world.get_node_px(self.moves[-1][1])
         # Check if vehicle isn't moving
-        if self.moves[i][0] == self.moves[i + 1][0]:
+        p1 = world.get_node_px(self.moves[index][1])
+        if self.moves[index][0] == self.moves[index + 1][0]:
             return p1
-        if self.moves[i][1] == self.moves[i + 1][1]:
+        if self.moves[index][1] == self.moves[index + 1][1]:
             return p1
-        p2 = world.get_node_px(self.moves[i + 1][1])
+        p2 = world.get_node_px(self.moves[index + 1][1])
         # Calculate postion between start and end points
-        ratio = (time - self.moves[i][0])/(self.moves[i + 1][0] - self.moves[i][0])
+        ratio = (time - self.moves[index][0])/(self.moves[index + 1][0] - self.moves[index][0])
         x = int(p1[0] + (p2[0] - p1[0])*ratio)
         y = int(p1[1] + (p2[1] - p1[1])*ratio)
         # print("T%4.1f: %f (%f, %f)" %(time, ratio, self.moves[i][0], self.moves[i + 1][0]))
