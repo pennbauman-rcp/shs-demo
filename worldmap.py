@@ -13,10 +13,10 @@ MAP_SCALES = [
     (1800,  900,  3, 2,  5),
 ]
 NODE_COLOR = "black"
-AIRPLANE_REGEX = re.compile("^(C17|B777)$")
-SHIP_REGEX = re.compile("^(LMSR)$")
-TRUCK_REGEX = re.compile("^([Tt]ruck_(US|EU))$")
-TRAIN_REGEX = re.compile("^([Tt]rain_(US|EU))$")
+AIRPLANE_REGEX = re.compile("^(plane|C17|B777)$")
+SHIP_REGEX = re.compile("^(ship|LMSR)$")
+TRUCK_REGEX = re.compile("^(truck|[Tt]ruck_(US|EU))$")
+TRAIN_REGEX = re.compile("^(train|[Tt]rain_(US|EU))$")
 
 
 # Main map window, contains all map elements
@@ -227,24 +227,36 @@ class WorldClock:
     def step(self, world: WorldMap):
         world.canvas.itemconfig(self.canvas_text, text="T%.3f" % world.time)
 
-# Key for vehicle types
+
+class VehicleKind:
+    def __init__(self, model: str):
+        if AIRPLANE_REGEX.match(model):
+            self.name = "Airplane"
+            self.color = "orange"
+        elif SHIP_REGEX.match(model):
+            self.name = "Ship"
+            self.color = "red"
+        elif TRUCK_REGEX.match(model):
+            self.name = "Truck"
+            self.color = "green"
+        elif TRAIN_REGEX.match(model):
+            self.name = "Train"
+            self.color = "purple"
+        else:
+            raise ValueError("Unknown model '%s'" % model)
+
+# On map key for vehicle types
 class VehicleKey:
     def display(self, world: WorldMap):
-        vehicles = ["Truck", "Train", "Ship", "Airplane"]
-        colors = ["green", "purple", "red", "orange"]
-        positions = [
-            world.coord.calc_percent_px(1, 98),
-            world.coord.calc_percent_px(1, 96),
-            world.coord.calc_percent_px(1, 94),
-            world.coord.calc_percent_px(1, 92),
-        ]
+        vehicles = [VehicleKind("truck"), VehicleKind("train"), VehicleKind("ship"), VehicleKind("plane")]
         self.canvas_dots = [None] * 4
         self.canvas_texts = [None] * 4
         for i in range(0, 4):
-            p1 = (positions[i][0] - world.coord.vehicle_radius, positions[i][1] - world.coord.vehicle_radius)
-            p2 = (positions[i][0] + world.coord.vehicle_radius, positions[i][1] + world.coord.vehicle_radius)
-            self.canvas_dots[i] = world.canvas.create_oval(p1, p2, fill=colors[i], outline=colors[i])
-            self.canvas_texts[i] = world.canvas.create_text(positions[i][0] + world.coord.vehicle_radius * 3, positions[i][1], fill=NODE_COLOR, text=vehicles[i], anchor=tkinter.W)
+            x, y = world.coord.calc_percent_px(1, 98 - 2*i)
+            p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
+            p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
+            self.canvas_dots[i] = world.canvas.create_oval(p1, p2, fill=vehicles[i].color, outline=vehicles[i].color)
+            self.canvas_texts[i] = world.canvas.create_text(x + world.coord.vehicle_radius * 3, y, fill=NODE_COLOR, text=vehicles[i].name, anchor=tkinter.W)
 
 
 
@@ -299,16 +311,7 @@ class MapVehicle:
         self.vehicle_id = vehicle_id
         self.model = model
         self.moves = moves
-        if AIRPLANE_REGEX.match(model):
-            self.color = "orange"
-        elif SHIP_REGEX.match(model):
-            self.color = "red"
-        elif TRUCK_REGEX.match(model):
-            self.color = "green"
-        elif TRAIN_REGEX.match(model):
-            self.color = "purple"
-        else:
-            raise ValueError("Unknown model '%s'" % model)
+        self.kind = VehicleKind(model)
 
     # Get vehicle location at a given time, return None if vehicle is out of use
     def get_location_at(self, time: float, world: WorldMap) -> tuple[int, int]:
@@ -352,7 +355,7 @@ class MapVehicle:
             (x, y) = loc
             p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
             p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
-            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.color, outline=self.color)
+            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.kind.color, outline=self.kind.color)
 
     # Update vehicle on canvas for current time
     def step(self, world: WorldMap):
@@ -362,6 +365,6 @@ class MapVehicle:
             p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
             p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
             world.canvas.delete(self.canvas_icon)
-            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.color, outline=self.color)
+            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.kind.color, outline=self.kind.color)
         else:
             world.canvas.delete(self.canvas_icon)
