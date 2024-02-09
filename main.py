@@ -7,7 +7,7 @@ from csvdata import *
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(prog='SHS Demo')
-parser.add_argument("-n", "--nodes", default="data/opennav_airports.csv", help="CSV file containing location node definitions")
+parser.add_argument("-n", "--nodes", default="data/airports_icao.csv", help="CSV file containing location node definitions")
 parser.add_argument("-l", "--mission-log", help="CSV file containing mission events")
 parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed information")
 parser.add_argument("-s", "--speed", type=int, default=100, help="Animation speed, must be a factor of 100 (default: 10)")

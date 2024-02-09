@@ -1,18 +1,21 @@
 #!/bin/python3
 import sys
 import csv
+import re
 import string
 import requests
 import functools
 from bs4 import BeautifulSoup
 
 
-BASE_URL = "https://opennav.com"
+BASE_URL = "https://airportcodes.aero"
+LINK_REGEX = re.compile("^/[A-Z0-9]{3,4}$")
 
 
 if len(sys.argv) < 2:
     print("Missing output CSV file")
     sys.exit(1)
+
 
 @functools.total_ordering
 class Airport:
@@ -82,17 +85,19 @@ class Airport:
             display_name += " (" + self.country + ")"
         return [self.icao, self.lat, self.lon, display_name]
 
+
+
 airports = []
 
 for letter in string.ascii_uppercase:
-    url = BASE_URL + "/airportcodes/icao?" + letter
+    url = BASE_URL + "/icao/" + letter
     print(url)
     data = requests.get(url)
     page = BeautifulSoup(data.content, "html.parser")
 
     # Find all airport links on page
     for link in page.findAll("a"):
-        if not link["href"].startswith("/airport/"):
+        if not LINK_REGEX.match(link["href"]):
             continue
         new = Airport(link["href"])
         new.fetch_data()
