@@ -6,14 +6,13 @@ from tkinter import ttk
 from csvdata import *
 
 
-MAP_FILE_FMT = "files/equirectangular_earth_map_%04dx%04d.png"
 MAP_SCALES = [
-    # px_width, px_width, node_radius, line_width, vehicle_radius
-    (7200, 3600, 12, 8, 20),
-    (3600, 1800,  6, 4, 10),
-    (1800,  900,  3, 2,  5),
+    # px_width, px_width, scale
+    (7200, 3600, 4),
+    (3600, 1800, 2),
+    (1800,  900, 1),
 ]
-NODE_COLOR = "black"
+ICON_SIZE = 1 # 1 or 2
 AIRPLANE_REGEX = re.compile("^(plane|C17|B777)$")
 SHIP_REGEX = re.compile("^(ship|LMSR)$")
 TRUCK_REGEX = re.compile("^(truck|[Tt]ruck_(US|EU))$")
@@ -32,6 +31,7 @@ class WorldMap:
     end_time = 0.0
     paused = False
     speed = 1
+    style = None
 
     def __init__(self, nodes: LocationsData = None, routing: RoutingData = None):
         self.coord = WorldCoordinates()
@@ -52,6 +52,9 @@ class WorldMap:
     def crop(self, min_lat: int, min_lon: int):
         self.coord = WorldCoordinates(min_lat, min_lon, 2)
         # print("Cropping world to", self.coord)
+
+    def style(self, style: str, icons: bool):
+        self.style = WorldStyle(style, icons)
 
     # Get pixel location of a node by name
     def get_node_px(self, name: str) -> tuple[int, int]:
@@ -77,6 +80,9 @@ class WorldMap:
         self.tk.grid()
         self.coord.set_px(self.tk.winfo_screenwidth(), self.tk.winfo_screenheight())
         self.tk.minsize(self.coord.px_width, self.coord.px_height)
+        if not self.style:
+            self.style = WorldStyle()
+        self.style.set_px(self)
         # print("Displaying World, (0, 0) is", self.coord.calc_px(0, 0))
 
         # Create toolbar
@@ -97,8 +103,7 @@ class WorldMap:
         self.canvas.grid(column=0, row=1)
         img_width = self.coord.px_width * self.coord.zoom
         img_height = self.coord.px_height * self.coord.zoom
-        bg_img_file = MAP_FILE_FMT % (img_width, img_height)
-        self.bg_img = tkinter.PhotoImage(file=bg_img_file)
+        self.bg_img = tkinter.PhotoImage(file=self.style.get_map_file(img_width, img_height))
         self.canvas.create_image(self.coord.calc_world_offset_px(), image=self.bg_img, anchor=tkinter.NW)
         if verbose:
             center_lat = self.coord.min_lat + (self.coord.max_lat - self.coord.min_lat)/2
@@ -152,12 +157,12 @@ class WorldMap:
             v.step(self)
         self.clock.step(self)
 
-        self.time += 0.05 * self.speed
         if self.time <= self.end_time:
             self.tk.after(10, self.step)
         else:
             if self.verbose:
                 print("Finished animation (T%.3f)" % self.time)
+        self.time += 0.05 * self.speed
 
     def pause(self):
         self.paused = True
@@ -208,9 +213,7 @@ class WorldCoordinates:
             if (scale[0] < max_width) and (scale[1] < max_height):
                 self.px_width = scale[0]
                 self.px_height = scale[1]
-                self.node_radius = scale[2]
-                self.line_width = scale[3]
-                self.vehicle_radius = scale[4]
+                self.scale = scale[2]
                 return
         raise ValueError("Unsupported screen resolution %dx%d" % (max_width, max_height))
 
@@ -248,45 +251,87 @@ class WorldCoordinates:
         return (int(x), int(y))
 
 
+class WorldStyle:
+    def __init__(self, map_style: str, icons: bool = False):
+        if map_style:
+            self.map = map_style
+        else:
+            self.map = "light"
+        self.icons = icons
+        # Determine colors
+        if self.map == "light":
+            self.text = "#000000"
+            self.vehicles = {
+                    "Airplane": "#ffa500",
+                    "Ship":     "#ff0000",
+                    "Train":    "#800080",
+                    "Truck":    "#008000",
+                }
+        else:
+            self.text = "#eeeeee"
+            self.vehicles = {
+                    "Airplane": "#ff5252",
+                    "Ship":     "#40c4ff",
+                    "Train":    "#b2ff59",
+                    "Truck":    "#7c4dff",
+                }
+
+    def set_px(self, world: WorldMap):
+        # Determine map item scales
+        self.node_radius = world.coord.scale * 3
+        self.vehicle_radius = world.coord.scale * 5
+        if self.map == "light":
+            self.line_width = world.coord.scale * 2
+        else:
+            self.line_width = world.coord.scale
+
+    def get_map_file(self, w: int, h: int) -> str:
+        if self.map == "light":
+            return "files/equirectangular_earth_map_light_%04dx%04d.png" % (w, h)
+        elif self.map == "dark":
+            return "files/equirectangular_earth_map_dark_%04dx%04d.png" % (w, h)
+        elif self.map == "satellite":
+            return "files/equirectangular_earth_satellite_%04dx%04d.png" % (w, h)
+
+    def get_icon_file(self, vehicle: str) -> str:
+        if not (self.node_radius and self.vehicle_radius and self.line_width):
+            raise ValueError("Pixels values must be set get icon files")
+        color = self.vehicles[vehicle].replace("#", "")
+        size = self.vehicle_radius * 4 * ICON_SIZE
+        return "files/%s_%s_%dx%d.png" % (vehicle.lower(), color, size, size)
+
+
+
 # Clock for the corner of the map
 class WorldClock:
     def display(self, world: WorldMap):
         x, y = world.coord.calc_percent_px(99, 98)
-        self.canvas_text = world.canvas.create_text(x, y, fill=NODE_COLOR, text="T%.3f" % 0.0, anchor=tkinter.SE)
+        self.canvas_text = world.canvas.create_text(x, y, fill=world.style.text, text="T%.3f" % 0.0, anchor=tkinter.SE)
 
     def step(self, world: WorldMap):
         world.canvas.itemconfig(self.canvas_text, text="T%.3f" % world.time)
 
 
-class VehicleKind:
-    def __init__(self, model: str):
-        if AIRPLANE_REGEX.match(model):
-            self.name = "Airplane"
-            self.color = "orange"
-        elif SHIP_REGEX.match(model):
-            self.name = "Ship"
-            self.color = "red"
-        elif TRUCK_REGEX.match(model):
-            self.name = "Truck"
-            self.color = "green"
-        elif TRAIN_REGEX.match(model):
-            self.name = "Train"
-            self.color = "purple"
-        else:
-            raise ValueError("Unknown model '%s'" % model)
-
 # On map key for vehicle types
 class VehicleKey:
     def display(self, world: WorldMap):
-        vehicles = [VehicleKind("truck"), VehicleKind("train"), VehicleKind("ship"), VehicleKind("plane")]
-        self.canvas_dots = [None] * 4
+        vehicles = ["Airplane", "Ship", "Train", "Truck"]
+        self.icon_images = [None] * 4
+        self.canvas_icons = [None] * 4
         self.canvas_texts = [None] * 4
         for i in range(0, 4):
-            x, y = world.coord.calc_percent_px(1, 98 - 2*i)
-            p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
-            p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
-            self.canvas_dots[i] = world.canvas.create_oval(p1, p2, fill=vehicles[i].color, outline=vehicles[i].color)
-            self.canvas_texts[i] = world.canvas.create_text(x + world.coord.vehicle_radius * 3, y, fill=NODE_COLOR, text=vehicles[i].name, anchor=tkinter.W)
+            if world.style.icons:
+                x, y = world.coord.calc_percent_px(1 + 0.5*ICON_SIZE, 92 - 4*ICON_SIZE + (2 + ICON_SIZE)*i)
+                self.icon_images[i] = tkinter.PhotoImage(file=world.style.get_icon_file(vehicles[i]))
+                self.canvas_icons[i] = world.canvas.create_image(x, y, image=self.icon_images[i])
+                self.canvas_texts[i] = world.canvas.create_text(x + world.style.vehicle_radius * (2 + 2*ICON_SIZE), y, fill=world.style.text, text=vehicles[i], anchor=tkinter.W)
+            else:
+                x, y = world.coord.calc_percent_px(1, 92 + 2*i)
+                p1 = (x - world.style.vehicle_radius, y - world.style.vehicle_radius)
+                p2 = (x + world.style.vehicle_radius, y + world.style.vehicle_radius)
+                color = world.style.vehicles[vehicles[i]]
+                self.canvas_icons[i] = world.canvas.create_oval(p1, p2, fill=color, outline=color)
+                self.canvas_texts[i] = world.canvas.create_text(x + world.style.vehicle_radius * 3, y, fill=world.style.text, text=vehicles[i], anchor=tkinter.W)
 
 
 
@@ -304,9 +349,9 @@ class MapNode:
 
     def display(self, world: WorldMap):
         (x, y) = world.coord.calc_px(self.lat, self.lon)
-        p1 = (x - world.coord.node_radius, y - world.coord.node_radius)
-        p2 = (x + world.coord.node_radius, y + world.coord.node_radius)
-        self.canvas_dot = world.canvas.create_oval(p1, p2, fill=NODE_COLOR, outline=NODE_COLOR)
+        p1 = (x - world.style.node_radius, y - world.style.node_radius)
+        p2 = (x + world.style.node_radius, y + world.style.node_radius)
+        self.canvas_dot = world.canvas.create_oval(p1, p2, fill=world.style.text, outline=world.style.text)
 
     def hide(self, world: WorldMap):
         world.canvas.itemconfig(self.canvas_dot, state="hidden")
@@ -327,7 +372,7 @@ class MapLeg:
     def display(self, world: WorldMap):
         p1 = world.get_node_px(self.start_node)
         p2 = world.get_node_px(self.end_node)
-        self.canvas_line = world.canvas.create_line(p1, p2, fill=NODE_COLOR, width=world.coord.line_width)
+        self.canvas_line = world.canvas.create_line(p1, p2, fill=world.style.text, width=world.style.line_width)
 
 
 # Single vehicle; with model, movement over time, and canvas object
@@ -335,13 +380,23 @@ class MapVehicle:
     vehicle_id = ""
     model = ""
     moves = [] # (time: float, loc: str)
+    icon_img = None
     canvas_icon = None
 
     def __init__(self, vehicle_id: str, model: str, moves: list[tuple[float, str]]):
         self.vehicle_id = vehicle_id
         self.model = model
         self.moves = moves
-        self.kind = VehicleKind(model)
+        if AIRPLANE_REGEX.match(model):
+            self.kind = "Airplane"
+        elif SHIP_REGEX.match(model):
+            self.kind = "Ship"
+        elif TRUCK_REGEX.match(model):
+            self.kind = "Truck"
+        elif TRAIN_REGEX.match(model):
+            self.kind = "Train"
+        else:
+            raise ValueError("Unknown model '%s'" % model)
 
     # Calculate index of move at give time
     def _index_at_time(self, time: float) -> int:
@@ -380,24 +435,22 @@ class MapVehicle:
         # print("T%4.1f: %f (%f, %f)" %(time, ratio, self.moves[i][0], self.moves[i + 1][0]))
         return (x, y)
 
-
     # Show on canvas if vehicle exists at time 0
     def display(self, world: WorldMap):
-        loc = self.get_location_at(0.0, world)
+        loc = self.get_location_at(world.time, world)
         if loc:
-            (x, y) = loc
-            p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
-            p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
-            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.kind.color, outline=self.kind.color)
+            if world.style.icons:
+                if not self.icon_img:
+                    self.icon_img = tkinter.PhotoImage(file=world.style.get_icon_file(self.kind))
+                self.canvas_icon = world.canvas.create_image(loc, image=self.icon_img)
+            else:
+                (x, y) = loc
+                p1 = (x - world.style.vehicle_radius, y - world.style.vehicle_radius)
+                p2 = (x + world.style.vehicle_radius, y + world.style.vehicle_radius)
+                color = world.style.vehicles[self.kind]
+                self.canvas_icon = world.canvas.create_oval(p1, p2, fill=color, outline=color)
 
     # Update vehicle on canvas for current time
     def step(self, world: WorldMap):
-        loc = self.get_location_at(world.time, world)
-        if loc:
-            (x, y) = loc
-            p1 = (x - world.coord.vehicle_radius, y - world.coord.vehicle_radius)
-            p2 = (x + world.coord.vehicle_radius, y + world.coord.vehicle_radius)
-            world.canvas.delete(self.canvas_icon)
-            self.canvas_icon = world.canvas.create_oval(p1, p2, fill=self.kind.color, outline=self.kind.color)
-        else:
-            world.canvas.delete(self.canvas_icon)
+        world.canvas.delete(self.canvas_icon)
+        self.display(world)

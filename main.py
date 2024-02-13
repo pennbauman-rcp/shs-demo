@@ -11,7 +11,8 @@ parser.add_argument("-n", "--nodes", default="data/airports_icao.csv", help="CSV
 parser.add_argument("-l", "--mission-log", help="CSV file containing mission events")
 parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed information")
 parser.add_argument("-s", "--speed", type=int, default=1, help="Animation speed, a integer between 1 and 20 ")
-
+parser.add_argument("--style", choices=["light", "dark", "satellite"], help="Animation style and color scheme")
+parser.add_argument("--icons", action="store_true", help="Use icons in place of dots of vehicles")
 args = parser.parse_args()
 
 nodes = LocationsData.from_csv(args.nodes, args.verbose)
@@ -22,4 +23,5 @@ else:
 
 world = WorldMap(nodes, routing)
 world.crop(0, -120)
+world.style(args.style, args.icons)
 world.run(args.speed, args.verbose)
