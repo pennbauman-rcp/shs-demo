@@ -103,7 +103,7 @@ class WorldMap:
         self.canvas.grid(column=0, row=1)
         img_width = self.coord.px_width * self.coord.zoom
         img_height = self.coord.px_height * self.coord.zoom
-        self.bg_img = tkinter.PhotoImage(file=self.style.get_map_file(img_width, img_height))
+        self.bg_img = tkinter.PhotoImage(master=self.canvas, file=self.style.get_map_file(img_width, img_height))
         self.canvas.create_image(self.coord.calc_world_offset_px(), image=self.bg_img, anchor=tkinter.NW)
         if verbose:
             center_lat = self.coord.min_lat + (self.coord.max_lat - self.coord.min_lat)/2

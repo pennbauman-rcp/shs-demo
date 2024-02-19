@@ -1,0 +1,4 @@
+[submodule "simulator/simcode"]
+	path = simulator/simcode
+	url = git@github.com:suecoxdesigns/SimPy-Simulation.git
+	branch = lib
