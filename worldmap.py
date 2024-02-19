@@ -2,6 +2,7 @@ import sys
 import re
 import tkinter
 from tkinter import ttk
+from tkinter import font
 
 from csvdata import *
 
@@ -21,20 +22,17 @@ TRAIN_REGEX = re.compile("^(train|[Tt]rain_(US|EU))$")
 
 # Main map window, contains all map elements
 class WorldMap:
-    nodes = []
-    legs = []
-    vehicles = []
-    tk = None
-    canvas = None
-    bg_img = None
     time = 0.0
     end_time = 0.0
     paused = False
     speed = 1
-    style = None
 
     def __init__(self, nodes: LocationsData = None, routing: RoutingData = None):
         self.coord = WorldCoordinates()
+        self.graphs = []
+        self.nodes = []
+        self.legs = []
+        self.vehicles = []
         if nodes:
             self.nodes = []
             for n in nodes:
@@ -53,8 +51,25 @@ class WorldMap:
         self.coord = WorldCoordinates(min_lat, min_lon, 2)
         # print("Cropping world to", self.coord)
 
+    # Set style by style name ('light', 'dark', or 'satellite')
     def style(self, style: str, icons: bool):
         self.style = WorldStyle(style, icons)
+
+    def add_graph(self):
+        graph = MapGraph(35, 80, 30, 20)
+        graph.layout({
+                "title": "Vehicle Utilization",
+                "bars": ["Loading", "Moving", "Done"],
+                "colors": [
+                        self.style.vehicles["Airplane"],
+                        self.style.vehicles["Ship"],
+                        self.style.vehicles["Train"],
+                        self.style.vehicles["Truck"],
+                    ],
+                "max": len(self.vehicles),
+            })
+        graph.data_source(self.get_vehicle_usage)
+        self.graphs.append(graph)
 
     # Get pixel location of a node by name
     def get_node_px(self, name: str) -> tuple[int, int]:
@@ -63,6 +78,18 @@ class WorldMap:
                 n.unhide(self)
                 return self.coord.calc_px(n.lat, n.lon)
         raise ValueError("Unknown node '%s'" % (name))
+
+    def get_vehicle_usage(self) -> dict[str, list[int]]:
+        vehicle_index = {"Airplane": 0, "Ship": 1, "Train": 2, "Truck": 3}
+        usage = {
+                "Loading": [0]*4,
+                "Moving": [0]*4,
+                "Done": [0]*4,
+            }
+        for v in self.vehicles:
+            usage[v.get_usage_at(self.time)][vehicle_index[v.kind]] += 1
+        return usage
+
 
     # Run map display window
     def run(self, speed: int, verbose: bool = False):
@@ -89,14 +116,24 @@ class WorldMap:
         self.toolbar = ttk.Frame(self.tk, padding=0)
         self.toolbar.grid()
         self.toolbar.grid(column=0, row=0)
-        ttk.Button(self.toolbar, text="Quit", command=self.tk.destroy).grid(column=0, row=0)
-        ttk.Button(self.toolbar, text="Pause", command=self.pause).grid(column=1, row=0)
-        ttk.Button(self.toolbar, text="1x Speed", command=lambda: self.set_speed(1)).grid(column=2, row=0)
-        ttk.Button(self.toolbar, text="2x Speed", command=lambda: self.set_speed(2)).grid(column=3, row=0)
-        ttk.Button(self.toolbar, text="4x Speed", command=lambda: self.set_speed(4)).grid(column=4, row=0)
-        ttk.Button(self.toolbar, text="8x Speed", command=lambda: self.set_speed(8)).grid(column=5, row=0)
-        ttk.Button(self.toolbar, text="16x Speed", command=lambda: self.set_speed(16)).grid(column=6, row=0)
-
+        buttons = [
+                ("Quit", self.tk.destroy),
+                ("Rewind x16", lambda: self.set_speed(-16)),
+                ("Rewind x8", lambda: self.set_speed(-8)),
+                ("Rewind x4", lambda: self.set_speed(-4)),
+                ("Rewind x2", lambda: self.set_speed(-2)),
+                ("Rewind", lambda: self.set_speed(-1)),
+                ("Pause", self.pause),
+                ("Play", lambda: self.set_speed(1)),
+                ("Speed x2", lambda: self.set_speed(2)),
+                ("Speed x4", lambda: self.set_speed(4)),
+                ("Speed x8", lambda: self.set_speed(8)),
+                ("Speed x16", lambda: self.set_speed(16)),
+            ]
+        col = 0
+        for b in buttons:
+            ttk.Button(self.toolbar, text=b[0], command=b[1]).grid(column=col, row=0)
+            col += 1
 
         # Setup canvas with background
         self.canvas = tkinter.Canvas(self.tk, bg="black", height=self.coord.px_height, width=self.coord.px_width, confine=False)
@@ -138,6 +175,8 @@ class WorldMap:
         self.clock.display(self)
         self.key = VehicleKey()
         self.key.display(self)
+        for g in self.graphs:
+            g.display(self)
 
         # Run animation
         self.tk.after(0, self.step)
@@ -156,6 +195,8 @@ class WorldMap:
         for v in self.vehicles:
             v.step(self)
         self.clock.step(self)
+        for g in self.graphs:
+            g.step(self)
 
         if self.time <= self.end_time:
             self.tk.after(10, self.step)
@@ -243,11 +284,11 @@ class WorldCoordinates:
         y = self.px_height - y
         return (x, y)
 
-    def calc_percent_px(self, lat_percent: float, lon_percent: float) -> tuple[int, int]:
+    def calc_percent_px(self, x_percent: float, y_percent: float) -> tuple[int, int]:
         if not (self.px_width and self.px_height):
             raise ValueError("Pixels must be set before they can be calculated")
-        x = (self.px_width * lat_percent) / 100
-        y = (self.px_height * lon_percent) / 100
+        x = (self.px_width * x_percent) / 100
+        y = (self.px_height * y_percent) / 100
         return (int(x), int(y))
 
 
@@ -261,6 +302,7 @@ class WorldStyle:
         # Determine colors
         if self.map == "light":
             self.text = "#000000"
+            self.bg = "#D9D9D9"
             self.vehicles = {
                     "Airplane": "#ffa500",
                     "Ship":     "#ff0000",
@@ -269,6 +311,7 @@ class WorldStyle:
                 }
         else:
             self.text = "#eeeeee"
+            self.bg = "#040404"
             self.vehicles = {
                     "Airplane": "#ff5252",
                     "Ship":     "#40c4ff",
@@ -284,6 +327,7 @@ class WorldStyle:
             self.line_width = world.coord.scale * 2
         else:
             self.line_width = world.coord.scale
+        self.font_px = font.nametofont('TkTextFont').actual()["size"]*world.coord.scale
 
     def get_map_file(self, w: int, h: int) -> str:
         if self.map == "light":
@@ -332,6 +376,81 @@ class VehicleKey:
                 color = world.style.vehicles[vehicles[i]]
                 self.canvas_icons[i] = world.canvas.create_oval(p1, p2, fill=color, outline=color)
                 self.canvas_texts[i] = world.canvas.create_text(x + world.style.vehicle_radius * 3, y, fill=world.style.text, text=vehicles[i], anchor=tkinter.W)
+
+
+class MapGraph:
+    def __init__(self, x, y, w, h):
+        self.x = x
+        self.y = y
+        self.width = w
+        self.height = h
+
+    def layout(self, params: dict):
+        self.title = params["title"]
+        self.bar_names = params["bars"]
+        self.layer_colors = params["colors"]
+        self.max_height = params["max"]
+
+    def data_source(self, func):
+        self.data_source = func
+
+    def display(self, world: WorldMap):
+        self.w_px, self.h_px = world.coord.calc_percent_px(self.width, self.height)
+        self.x_px, self.y_px = world.coord.calc_percent_px(self.x, self.y)
+        p1 = world.coord.calc_percent_px(self.x, self.y)
+        p2 = world.coord.calc_percent_px(self.x + self.width, self.y + self.height)
+        self.bg = world.canvas.create_rectangle(p1, p2, fill=world.style.bg, outline=world.style.text)
+        self.title_item = world.canvas.create_text(self.x_px + (self.w_px/2), self.y_px + world.style.font_px, text=self.title, fill=world.style.text)
+
+
+        # Create bars
+        x_frac = int(self.w_px / (len(self.bar_names)*3 + 1))
+        y_floor = self.y_px + self.h_px - (2*world.style.font_px)
+        bar_h = self.h_px - (4*world.style.font_px)
+        y_ceiling = self.y_px + (2*world.style.font_px)
+        # Create y index lines
+        self.index_lines = []
+        self.index_labels = []
+        for i in range(3):
+            y = y_floor - (bar_h*i / 2)
+            p1 = (self.x_px + x_frac - int(world.style.font_px/2), y)
+            p2 = (self.x_px + self.w_px - x_frac + int(world.style.font_px/2), y)
+            line = world.canvas.create_line(p1, p2, fill=world.style.text, width=1)
+            self.index_lines.append(line)
+            text = "%.0f" % (self.max_height*i / 2)
+            label = world.canvas.create_text(self.x_px + x_frac - world.style.font_px, y, text=text, fill=world.style.text, anchor=tkinter.E)
+            self.index_labels.append(label)
+
+        # Create bar labels
+        self.bar_labels = []
+        for i in range(len(self.bar_names)):
+            label = world.canvas.create_text(self.x_px + (x_frac*(2 + 3*i)), y_floor + (world.style.font_px), text=self.bar_names[i], fill=world.style.text)
+            self.bar_labels.append(label)
+        self.bars = []
+        # Create bars
+        for bar, vals in self.data_source().items():
+            bar_index = self.bar_names.index(bar)
+            start = self.x_px + x_frac + (3*bar_index*x_frac)
+            end = self.x_px + (3*x_frac*(bar_index + 1))
+            layers = []
+            sum_height = 0
+            # Create layers of bars
+            for i in range(len(vals)):
+                if vals[i] == 0:
+                    continue
+                p1 = (start, y_floor - int(bar_h*sum_height / self.max_height))
+                p2 = (end, y_floor - int(bar_h*(sum_height + vals[i]) / self.max_height))
+                color = self.layer_colors[i]
+                rect = world.canvas.create_rectangle(p1, p2, fill=color, outline=color)
+                layers.append(rect)
+                sum_height += vals[i]
+            self.bars.append(layers)
+
+    def step(self, world: WorldMap):
+        for layers in self.bars:
+            for l in layers:
+                world.canvas.delete(l)
+        self.display(world)
 
 
 
@@ -434,6 +553,23 @@ class MapVehicle:
         y = int(p1[1] + (p2[1] - p1[1])*ratio)
         # print("T%4.1f: %f (%f, %f)" %(time, ratio, self.moves[i][0], self.moves[i + 1][0]))
         return (x, y)
+
+    # Get what a vehicle is doing at a given time
+    def get_usage_at(self, time: float) -> str:
+        index = self._index_at_time(time)
+        # Check if vehicle hasn't moved
+        if index == -1:
+            return "Loading"
+        # Check if vehicle is finished
+        if index == len(self.moves) - 1:
+            return "Done"
+        # Check if vehicle isn't moving (loading)
+        if self.moves[index][0] == self.moves[index + 1][0]:
+            return "Loading"
+        if self.moves[index][1] == self.moves[index + 1][1]:
+            return "Loading"
+        # Vehicle must be moving
+        return "Moving"
 
     # Show on canvas if vehicle exists at time 0
     def display(self, world: WorldMap):
