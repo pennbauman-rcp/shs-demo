@@ -1,1 +1,10 @@
+matplotlib
+networkx
+numpy
+openpyxl
+pandas
+pillow
+pyarrow
 pytest
+seaborn
+simpy

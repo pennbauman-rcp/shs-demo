@@ -5,12 +5,12 @@ from tkinter import ttk
 
 # Default counts for each vehicle
 VEHICLE_COUNTS = {
-        "C17":      12,
+        "C17":      10,
         "B777":     10,
-        "LMSR":     4,
-        "train_US": 20,
-        "truck_EU": 70,
-        "truck_US": 70,
+        "LMSR":     5,
+        "train_US": 10,
+        "truck_EU": 50,
+        "truck_US": 50,
         "train_EU": 10,
     }
 # Label text for each vehicle
