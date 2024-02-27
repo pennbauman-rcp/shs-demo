@@ -112,8 +112,11 @@ class WorldMap:
             col += 1
 
         # Setup canvas with background
-        self.canvas.set_nodes(self.nodes)
-        self.canvas.display(self.tk, verbose)
+        self.map_frame = ttk.Frame(self.tk, padding=0)
+        self.map_frame.grid(column=0, row=1)
+        for n in self.nodes:
+            self.canvas.add_named_loc(n.name, n.lat, n.lon)
+        self.canvas.display(self.map_frame, verbose)
 
         # Setup overlay items
         node_count = 0
@@ -168,6 +171,7 @@ class WorldMap:
         if self.paused:
             self.tk.after(10, self.step)
             return
+
         for v in self.vehicles:
             v.step(self.canvas, self.time)
         self.clock.step(self.canvas, self.time)
@@ -175,11 +179,11 @@ class WorldMap:
             g.step(self.canvas)
 
         if self.time <= self.end_time:
-            self.tk.after(10, self.step)
+            self.tk.after(1, self.step)
         else:
             if self.verbose:
                 print("Finished animation (T%.3f)" % self.time)
-        self.time += 0.05 * self.speed
+        self.time += 0.01 * self.speed
 
     def pause(self):
         self.paused = True

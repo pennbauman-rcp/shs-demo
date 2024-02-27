@@ -3,7 +3,7 @@ from tkinter import ttk
 from tkinter import font
 
 from animation.canvas import MapCanvas
-from animation.object import ICON_SIZE
+from animation.objects import ICON_SIZE
 
 
 # Clock for the corner of the map

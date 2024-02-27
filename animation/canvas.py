@@ -14,6 +14,7 @@ class MapCanvas:
     def __init__(self):
         self.style = None
         self.coord = WorldCoordinates()
+        self.named = {}
 
     # Set style by style name ('light', 'dark', or 'satellite')
     def set_style(self, style_name: str, icons: bool):
@@ -24,19 +25,22 @@ class MapCanvas:
         self.coord = WorldCoordinates(min_lat, min_lon, 2)
         # print("Cropping world to", self.coord)
 
-    # TODO remove
-    def set_nodes(self, nodes):
-        self.nodes = nodes
+    # Add a named location that other can reference later
+    def add_named_loc(self, name: str, lat: float, lon: float):
+        if "_" in name:
+            # Everything after a '_' is stripped by the getter (see below)
+            raise ValueError("'_' not allowed in named locations")
+        try:
+            self.named[name] = self.coord.calc_px(lat, lon)
+        except:
+            self.named[name] = None
 
-    # Get pixel location of a node by name
-    def get_node_px(self, name: str) -> tuple[int, int]:
-        for n in self.nodes:
-            if name.split("_")[0] == n.name:
-                n.unhide(self)
-                return self.coord.calc_px(n.lat, n.lon)
+    # Get pixel location of a name location
+    def get_named_px(self, name: str) -> tuple[int, int]:
+        name = name.split("_")[0]
+        if name in self.named:
+            return self.named[name]
         raise ValueError("Unknown node '%s'" % (name))
-
-    # def init(self):
 
     def display(self, parent, verbose: bool = False):
         if not self.style:
@@ -44,7 +48,7 @@ class MapCanvas:
         self.style.set_px(self)
         # Setup canvas with background
         self.canvas = tkinter.Canvas(parent, bg="black", height=self.coord.px_height, width=self.coord.px_width, confine=False)
-        self.canvas.grid(column=0, row=1)
+        self.canvas.grid(column=0, row=0)
         img_width = self.coord.px_width * self.coord.zoom
         img_height = self.coord.px_height * self.coord.zoom
         self.bg_img = tkinter.PhotoImage(master=self.canvas, file=self.style.get_map_file(img_width, img_height))

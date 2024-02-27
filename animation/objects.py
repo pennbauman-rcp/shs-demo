@@ -20,7 +20,7 @@ class MapNode:
     lon = 0
     canvas_dot = None
 
-    def __init__(self, name: str, lat: int, lon: int):
+    def __init__(self, name: str, lat: float, lon: float):
         self.name = name
         self.lat = lat
         self.lon = lon
@@ -47,10 +47,10 @@ class MapLeg:
         self.start_node = start_node
         self.end_node = end_node
 
-    def display(self, world: MapCanvas):
-        p1 = world.get_node_px(self.start_node)
-        p2 = world.get_node_px(self.end_node)
-        self.canvas_line = world.canvas.create_line(p1, p2, fill=world.style.text, width=world.style.line_width)
+    def display(self, canvas: MapCanvas):
+        p1 = canvas.get_named_px(self.start_node)
+        p2 = canvas.get_named_px(self.end_node)
+        self.canvas_line = canvas.canvas.create_line(p1, p2, fill=canvas.style.text, width=canvas.style.line_width)
 
 
 # Single vehicle; with model, movement over time, and canvas object
@@ -96,16 +96,16 @@ class MapVehicle:
         index = self._index_at_time(time)
         # Check if vehicle is before or after its moves
         if index == -1:
-            return world.get_node_px(self.moves[0][1])
+            return world.get_named_px(self.moves[0][1])
         if index == len(self.moves) - 1:
-            return world.get_node_px(self.moves[-1][1])
+            return world.get_named_px(self.moves[-1][1])
         # Check if vehicle isn't moving
-        p1 = world.get_node_px(self.moves[index][1])
+        p1 = world.get_named_px(self.moves[index][1])
         if self.moves[index][0] == self.moves[index + 1][0]:
             return p1
         if self.moves[index][1] == self.moves[index + 1][1]:
             return p1
-        p2 = world.get_node_px(self.moves[index + 1][1])
+        p2 = world.get_named_px(self.moves[index + 1][1])
         # Calculate postion between start and end points
         ratio = (time - self.moves[index][0])/(self.moves[index + 1][0] - self.moves[index][0])
         x = int(p1[0] + (p2[0] - p1[0])*ratio)
@@ -130,23 +130,35 @@ class MapVehicle:
         # Vehicle must be moving
         return "Moving"
 
+    def draw_img(self, loc):
+        self.canvas_icon = self.canvas.canvas.create_image(loc, image=self.icon_img)
+
+    def draw_dot(self, loc):
+        (x, y) = loc
+        p1 = (x - self.canvas.style.vehicle_radius, y - self.canvas.style.vehicle_radius)
+        p2 = (x + self.canvas.style.vehicle_radius, y + self.canvas.style.vehicle_radius)
+        color = self.canvas.style.vehicles[self.kind]
+        self.canvas_icon = self.canvas.canvas.create_oval(p1, p2, fill=color, outline=color)
+
+
     # Show on canvas if vehicle exists at time 0
-    # TODO for time parameter
-    def display(self, world: MapCanvas, time: float = 0):
-        loc = self.get_location_at(time, world)
+    def display(self, canvas: MapCanvas):
+        self.canvas = canvas
+        if self.canvas.style.icons:
+            if not self.icon_img:
+                self.icon_img = tkinter.PhotoImage(file=self.canvas.style.get_icon_file(self.kind))
+            self.draw = self.draw_img
+        else:
+            self.draw = self.draw_dot
+
+        loc = self.get_location_at(0, canvas)
         if loc:
-            if world.style.icons:
-                if not self.icon_img:
-                    self.icon_img = tkinter.PhotoImage(file=world.style.get_icon_file(self.kind))
-                self.canvas_icon = world.canvas.create_image(loc, image=self.icon_img)
-            else:
-                (x, y) = loc
-                p1 = (x - world.style.vehicle_radius, y - world.style.vehicle_radius)
-                p2 = (x + world.style.vehicle_radius, y + world.style.vehicle_radius)
-                color = world.style.vehicles[self.kind]
-                self.canvas_icon = world.canvas.create_oval(p1, p2, fill=color, outline=color)
+            self.draw(loc)
 
     # Update vehicle on canvas for current time
     def step(self, world: MapCanvas, time: float):
-        world.canvas.delete(self.canvas_icon)
-        self.display(world, time)
+        self.canvas.canvas.delete(self.canvas_icon)
+
+        loc = self.get_location_at(time, world)
+        if loc:
+            self.draw(loc)
