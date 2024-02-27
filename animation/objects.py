@@ -3,10 +3,9 @@ import tkinter
 from tkinter import ttk
 from tkinter import font
 
-from animation.canvas import MapCanvas
+from animation.canvas import MapCanvas, ICON_SIZE
 
 
-ICON_SIZE = 1 # 1 or 2
 AIRPLANE_REGEX = re.compile("^(plane|C17|B777)$")
 SHIP_REGEX = re.compile("^(ship|LMSR)$")
 TRUCK_REGEX = re.compile("^(truck|[Tt]ruck_(US|EU))$")

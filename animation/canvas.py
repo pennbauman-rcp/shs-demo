@@ -8,6 +8,7 @@ MAP_SCALES = [
     (3600, 1800, 2),
     (1800,  900, 1),
 ]
+ICON_SIZE = 1 # 1 or 2
 
 
 class MapCanvas:
@@ -53,6 +54,7 @@ class MapCanvas:
         img_height = self.coord.px_height * self.coord.zoom
         self.bg_img = tkinter.PhotoImage(master=self.canvas, file=self.style.get_map_file(img_width, img_height))
         self.canvas.create_image(self.coord.calc_world_offset_px(), image=self.bg_img, anchor=tkinter.NW)
+
         if verbose:
             center_lat = self.coord.min_lat + (self.coord.max_lat - self.coord.min_lat)/2
             center_lon = self.coord.min_lon + (self.coord.max_lon - self.coord.min_lon)/2
@@ -178,18 +180,18 @@ class WorldStyle:
 
     def get_map_file(self, w: int, h: int) -> str:
         if self.map == "light":
-            return "files/equirectangular_earth_map_light_%04dx%04d.png" % (w, h)
+            return "files/maps/equirectangular_earth_map_light_%04dx%04d.png" % (w, h)
         elif self.map == "dark":
-            return "files/equirectangular_earth_map_dark_%04dx%04d.png" % (w, h)
+            return "files/maps/equirectangular_earth_map_dark_%04dx%04d.png" % (w, h)
         elif self.map == "satellite":
-            return "files/equirectangular_earth_satellite_%04dx%04d.png" % (w, h)
+            return "files/maps/equirectangular_earth_satellite_%04dx%04d.png" % (w, h)
 
     def get_icon_file(self, vehicle: str) -> str:
         if not (self.node_radius and self.vehicle_radius and self.line_width):
             raise ValueError("Pixels values must be set get icon files")
         color = self.vehicles[vehicle].replace("#", "")
         size = self.vehicle_radius * 4 * ICON_SIZE
-        return "files/%s_%s_%dx%d.png" % (vehicle.lower(), color, size, size)
+        return "files/icons/%s_%s_%dx%d.png" % (vehicle.lower(), color, size, size)
 
 
 

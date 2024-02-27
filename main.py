@@ -2,9 +2,9 @@
 import argparse
 import tkinter
 
-from worldmap import WorldMap
-from csvdata import *
-from dataform import DataInputWindow
+from animation.window import WorldMap
+from data.csvparse import *
+from data.inputform import DataInputWindow
 from simulator.wrapper import Simulation
 
 TMP_FILE="/tmp/shs_demo_mission_log.csv"
@@ -12,7 +12,7 @@ TMP_FILE="/tmp/shs_demo_mission_log.csv"
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(prog='SHS Demo')
-parser.add_argument("-n", "--nodes", default="data/airports_icao.csv", help="CSV file containing location node definitions")
+parser.add_argument("-n", "--nodes", default="files/airports_icao.csv", help="CSV file containing location node definitions")
 parser.add_argument("-l", "--mission-log", help="CSV file containing mission events")
 parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed information")
 parser.add_argument("-s", "--speed", type=int, default=1, help="Animation speed, a integer between 1 and 20 ")

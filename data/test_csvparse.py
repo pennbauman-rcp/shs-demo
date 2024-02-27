@@ -1,6 +1,6 @@
 import pytest
 import math
-from csvdata import *
+from data.csvparse import *
 
 # Helper function to compare floats
 def approx_eq_floats(a: float, b: float) -> bool:
