@@ -59,6 +59,10 @@ class MapVehicle:
     moves = [] # (time: float, loc: str)
     icon_img = None
     canvas_icon = None
+    cached_time_index = -9
+    cached_px_index = -9
+    cached_usage_index = -9
+    current_loc = None
 
     def __init__(self, vehicle_id: str, model: str, moves: list[tuple[float, str]]):
         self.vehicle_id = vehicle_id
@@ -81,6 +85,10 @@ class MapVehicle:
             return -1
         if time >= self.moves[-1][0]:
             return len(self.moves) - 1
+        if self.cached_time_index > 0:
+            if time > self.moves[self.cached_time_index][0]:
+                if time < self.moves[self.cached_time_index + 1][0]:
+                    return self.cached_time_index
         i = 0
         while i < len(self.moves) - 1:
             if time == self.moves[i][0]:
@@ -93,17 +101,26 @@ class MapVehicle:
     # Get vehicle location at a given time, return None if vehicle is out of use
     def get_location_at(self, time: float, world: MapCanvas) -> tuple[int, int]:
         index = self._index_at_time(time)
+        if index == self.cached_px_index:
+            return self.cached_px
         # Check if vehicle is before or after its moves
         if index == -1:
-            return world.get_named_px(self.moves[0][1])
+            ret = world.get_named_px(self.moves[0][1])
+            self.cached_px_index = index
+            self.cached_px = ret
+            return ret
         if index == len(self.moves) - 1:
-            return world.get_named_px(self.moves[-1][1])
+            ret = world.get_named_px(self.moves[-1][1])
+            self.cached_px_index = index
+            self.cached_px = ret
+            return ret
         # Check if vehicle isn't moving
         p1 = world.get_named_px(self.moves[index][1])
-        if self.moves[index][0] == self.moves[index + 1][0]:
-            return p1
         if self.moves[index][1] == self.moves[index + 1][1]:
+            self.cached_px_index = index
+            self.cached_px = p1
             return p1
+        self.cached_px_index = -2
         p2 = world.get_named_px(self.moves[index + 1][1])
         # Calculate postion between start and end points
         ratio = (time - self.moves[index][0])/(self.moves[index + 1][0] - self.moves[index][0])
@@ -116,17 +133,25 @@ class MapVehicle:
     def get_usage_at(self, time: float) -> str:
         index = self._index_at_time(time)
         # Check if vehicle hasn't moved
+        if index == self.cached_usage_index:
+            return self.cached_usage
         if index == -1:
+            self.cached_usage_index = index
+            self.cached_usage = "Loading"
             return "Loading"
         # Check if vehicle is finished
         if index == len(self.moves) - 1:
+            self.cached_usage_index = index
+            self.cached_usage = "Done"
             return "Done"
         # Check if vehicle isn't moving (loading)
-        if self.moves[index][0] == self.moves[index + 1][0]:
-            return "Loading"
         if self.moves[index][1] == self.moves[index + 1][1]:
+            self.cached_usage_index = index
+            self.cached_usage = "Loading"
             return "Loading"
         # Vehicle must be moving
+        self.cached_usage_index = index
+        self.cached_usage = "Moving"
         return "Moving"
 
     def draw_img(self, loc):
@@ -151,13 +176,16 @@ class MapVehicle:
             self.draw = self.draw_dot
 
         loc = self.get_location_at(0, canvas)
+        self.current_loc = loc
         if loc:
             self.draw(loc)
 
     # Update vehicle on canvas for current time
     def step(self, world: MapCanvas, time: float):
-        self.canvas.canvas.delete(self.canvas_icon)
-
         loc = self.get_location_at(time, world)
+        if loc == self.current_loc:
+            return
+        self.current_loc = loc
+        self.canvas.canvas.delete(self.canvas_icon)
         if loc:
             self.draw(loc)
