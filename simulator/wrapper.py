@@ -266,15 +266,12 @@ class Simulation:
         return self
 
     def set_vehicle_counts(self, counts: dict):
-        for v, c in counts.items():
-            self.vehicles.at[v, "number_avail"] = c
-            homes = self.vehicles.at[v, "home"]
-            frac = int(c / len(homes))
-            for h in homes:
-                homes[h] = frac
-                c -= frac
-            homes[h] += c
+        for v, homes in counts.items():
             self.vehicles.at[v, "home"] = homes
+            total = 0
+            for h in homes:
+                total += homes[h]
+            self.vehicles.at[v, "number_avail"] = total
 
     def run(self):
         if self.nodes.empty or self.vehicles.empty or self.movements.empty:

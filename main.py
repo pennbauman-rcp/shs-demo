@@ -25,12 +25,12 @@ nodes = LocationsData.from_csv(args.nodes, args.verbose)
 if args.mission_log:
     routing = RoutingData.from_csv(args.mission_log, args.verbose)
 else:
-    dataform = DataInputWindow()
-    vehicle_counts = dataform.run()
-
     print("Loading simulation data ...")
-    sim = Simulation.from_xlsx("data/simulation_input.xlsx")
-    sim.set_vehicle_counts(vehicle_counts)
+    sim = Simulation.from_xlsx("files/simulation_input.xlsx")
+    dataform = DataInputWindow(sim)
+    dataform.run()
+
+    sim.set_vehicle_counts(dataform.get_vehicles())
     print("Running simulation ...")
     sim.run()
     sim.save_to_csv(TMP_FILE)
