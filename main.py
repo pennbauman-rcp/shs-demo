@@ -40,7 +40,7 @@ else:
 
 print("Running animation ...")
 world = WorldMap(nodes, routing)
-world.crop(0, -120)
+world.crop(-5, -120)
 world.style(args.style, args.icons)
 world.add_graph()
 world.run(args.speed, args.verbose)

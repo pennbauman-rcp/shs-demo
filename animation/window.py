@@ -79,21 +79,29 @@ class WorldMap:
             print("WARNING: High speed '%s'" % speed)
         self.speed = speed
 
+
         self.tk = tkinter.Tk()
+        if self.tk.winfo_screenheight() == 1080:
+            SCALE = 1
+        elif self.tk.winfo_screenheight() == 2160:
+            SCALE = 2
+        else:
+            raise ValueError("Unknown screen resolution %dx%d" % (self.tk.winfo_screenheight(), self.tk.winfo_screenwidth()))
         self.tk.title("SHS Demo")
         self.tk.configure(bg="black")
         self.tk.grid()
-        self.canvas.coord.set_px(self.tk.winfo_screenwidth(), self.tk.winfo_screenheight())
-        # self.tk.minsize(self.coord.px_width, self.coord.px_height)
-        # self.canvas.style.set_px(self)
         # print("Displaying World, (0, 0) is", self.coord.calc_px(0, 0))
 
         # Create toolbar
-        self.toolbar = ttk.Frame(self.tk, padding=0)
-        self.toolbar.grid()
-        self.toolbar.grid(column=0, row=0)
+        self.toolbar = ttk.Frame(self.tk, padding=(5*SCALE, 2*SCALE))
+        self.toolbar.pack(fill=tkinter.X)
+        # Clock
+        self.clock = ttk.Label(self.toolbar, text="Time: 0.0", padding=(10*SCALE, 0), width=12)
+        self.clock.pack(side="left")
+        # Spacer
+        ttk.Label(self.toolbar).pack(side="left", expand=True)
+        # Centeral buttons
         buttons = [
-                ("Quit", self.tk.destroy),
                 ("Rewind x16", lambda: self.set_speed(-16)),
                 ("Rewind x8", lambda: self.set_speed(-8)),
                 ("Rewind x4", lambda: self.set_speed(-4)),
@@ -106,14 +114,22 @@ class WorldMap:
                 ("Speed x8", lambda: self.set_speed(8)),
                 ("Speed x16", lambda: self.set_speed(16)),
             ]
-        col = 0
         for b in buttons:
-            ttk.Button(self.toolbar, text=b[0], command=b[1]).grid(column=col, row=0)
-            col += 1
+            ttk.Button(self.toolbar, text=b[0], command=b[1]).pack(side="left", padx=5)
+        # Spacer (wider to balance clock)
+        ttk.Label(self.toolbar, width=6).pack(side="left", expand=True)
+        # Quit button
+        ttk.Button(self.toolbar, text="Quit", command=self.tk.destroy).pack(side="left")
 
-        # Setup canvas with background
-        self.map_frame = ttk.Frame(self.tk, padding=0)
-        self.map_frame.grid(column=0, row=1)
+
+        # Setup canvas
+        self.map_frame = ttk.Frame(self.tk, padding=0, borderwidth=0)
+        self.map_frame.pack(fill=tkinter.BOTH)
+        # Size map
+        canvas_w = self.tk.winfo_screenwidth() - 2
+        canvas_h = self.tk.winfo_screenheight() - 100*SCALE - 14
+        self.canvas.set_px(canvas_w, canvas_h)
+        # Add bases
         for n in self.nodes:
             self.canvas.add_named_loc(n.name, n.lat, n.lon)
         self.canvas.display(self.map_frame, verbose)
@@ -142,8 +158,6 @@ class WorldMap:
             print("Vehicles displayed (%d)" % len(self.vehicles))
 
         # Add map decorations
-        self.clock = WorldClock()
-        self.clock.display(self.canvas)
         self.key = VehicleKey()
         self.key.display(self.canvas)
         for g in self.graphs:
@@ -171,19 +185,19 @@ class WorldMap:
         if self.paused:
             self.tk.after(10, self.step)
             return
+        self.clock["text"] = "Time: %.3f" % self.time
 
         for v in self.vehicles:
             v.step(self.canvas, self.time)
-        self.clock.step(self.canvas, self.time)
         for g in self.graphs:
             g.step(self.canvas)
 
         if self.time <= self.end_time:
-            self.tk.after(1, self.step)
+            self.tk.after(10, self.step)
         else:
             if self.verbose:
                 print("Finished animation (T%.3f)" % self.time)
-        self.time += 0.01 * self.speed
+        self.time += 0.002 * self.speed
 
     def pause(self):
         self.paused = True

@@ -26,6 +26,9 @@ class MapCanvas:
         self.coord = WorldCoordinates(min_lat, min_lon, 2)
         # print("Cropping world to", self.coord)
 
+    def set_px(self, max_width: int, max_height: int):
+        self.coord.set_px(max_width, max_height)
+
     # Add a named location that other can reference later
     def add_named_loc(self, name: str, lat: float, lon: float):
         if "_" in name:
@@ -48,7 +51,7 @@ class MapCanvas:
             self.style = WorldStyle
         self.style.set_px(self)
         # Setup canvas with background
-        self.canvas = tkinter.Canvas(parent, bg="black", height=self.coord.px_height, width=self.coord.px_width, confine=False)
+        self.canvas = tkinter.Canvas(parent, bg="black", width=self.coord.px_width_full, height=self.coord.px_height_full, confine=False)
         self.canvas.grid(column=0, row=0)
         img_width = self.coord.px_width * self.coord.zoom
         img_height = self.coord.px_height * self.coord.zoom
@@ -101,7 +104,11 @@ class WorldCoordinates:
     def set_px(self, max_width: int, max_height: int):
         for scale in MAP_SCALES:
             if (scale[0] < max_width) and (scale[1] < max_height):
+                self.px_width_full = max_width
+                self.px_width_padding = int((max_width - scale[0]) / 2)
                 self.px_width = scale[0]
+                self.px_height_full = max_height
+                self.px_height_padding = int((max_height - scale[1]) / 2)
                 self.px_height = scale[1]
                 self.scale = scale[2]
                 return
@@ -120,8 +127,9 @@ class WorldCoordinates:
         if lon > self.max_lon:
             raise ValueError("Longitude above maximum")
         x = (lon - self.min_lon) * self.px_width / (self.max_lon - self.min_lon)
+        x = x + self.px_width_padding
         y = (lat - self.min_lat) * self.px_height / (self.max_lat - self.min_lat)
-        y = self.px_height - y
+        y = self.px_height - y + self.px_height_padding
         return (int(x), int(y))
 
     # Calculate overset for world map background
@@ -129,15 +137,16 @@ class WorldCoordinates:
         if not (self.px_width and self.px_height):
             raise ValueError("Pixels must be set before they can be calculated")
         x = (-180 - self.min_lon) * self.px_width / (self.max_lon - self.min_lon)
+        x = x + self.px_width_padding
         y = (90 - self.min_lat) * self.px_height / (self.max_lat - self.min_lat)
-        y = self.px_height - y
+        y = self.px_height - y + self.px_height_padding
         return (x, y)
 
     def calc_percent_px(self, x_percent: float, y_percent: float) -> tuple[int, int]:
         if not (self.px_width and self.px_height):
             raise ValueError("Pixels must be set before they can be calculated")
-        x = (self.px_width * x_percent) / 100
-        y = (self.px_height * y_percent) / 100
+        x = (self.px_width_full * x_percent) / 100
+        y = (self.px_height_full * y_percent) / 100
         return (int(x), int(y))
 
 
