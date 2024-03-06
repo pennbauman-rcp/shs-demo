@@ -1,4 +1,4 @@
-[submodule "simulator/simcode"]
-	path = simulator/simcode
-	url = git@github.com:suecoxdesigns/SimPy-Simulation.git
+[submodule "simulator"]
+	path = simulator
+	url = git@github.com:zmcRCP/SHS-Army.git
 	branch = lib

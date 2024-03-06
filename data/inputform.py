@@ -3,7 +3,7 @@ import re
 import tkinter
 from tkinter import ttk
 
-from simulator.wrapper import Simulation
+from simulator.frontend import SelfHealingSimulation
 
 # Default counts for each vehicle
 VEHICLE_COUNTS = {
@@ -41,7 +41,7 @@ class Data:
         return ret
 
     @staticmethod
-    def from_sim(sim: Simulation):
+    def from_sim(sim: SelfHealingSimulation):
         self = Data()
         for v in sim.vehicles.index:
             self.vehicles.append(self.Vehicle(v, sim.vehicles.at[v, "home"]))
@@ -108,7 +108,7 @@ class Data:
 
 
 class DataInputWindow:
-    def __init__(self, sim: Simulation):
+    def __init__(self, sim: SelfHealingSimulation):
         self.data = Data.from_sim(sim)
 
     def run(self):
