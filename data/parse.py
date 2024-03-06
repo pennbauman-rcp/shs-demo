@@ -1,6 +1,7 @@
 import sys
 import csv
 import re
+import pandas as pd
 
 
 MOVE_REGEX = re.compile("[Ll]eaving from [-_ a-zA-Z]+, (driv|sail|mov|fly|go)ing to [-_ a-zA-Z]+")
@@ -70,8 +71,7 @@ def dms2float(dms: str) -> float:
                 continue
         # Check for invalid characters
         if not (current[i].isdigit() or current[i] == "."):
-            print("ERROR: Invalid degree minute second value '%s'" % (dms))
-            sys.exit(1)
+            raise ValueError("ERROR: Invalid degree minute second value '%s'" % (dms))
         i += 1
     return flip * (degrees + (minutes / 60) + (seconds / 3600))
 
@@ -120,6 +120,20 @@ class LocationsData:
                     continue
                 self.nodes.append(self.Node.from_csv(row))
                 row_i += 1
+        return self
+
+    @staticmethod
+    def from_xlsx(filename: str, verbose: bool = False):
+        if verbose:
+            print("Reading locations from XLSX (%s)" % filename)
+        self = LocationsData()
+        data = pd.read_excel(filename, "Army_nodes")
+        for name in data.index:
+            new = self.Node()
+            new.name = data.at[name, "ICAO"]
+            new.lat = data.at[name, "lat"]
+            new.lon = data.at[name, "LNG_180"]
+            self.nodes.append(new)
         return self
 
     class Node:

@@ -3,11 +3,14 @@ import argparse
 import tkinter
 
 from animation.window import WorldMap
-from data.csvparse import *
+from data.parse import *
 from data.inputform import DataInputWindow
 from simulator.wrapper import Simulation
 
+
+
 TMP_FILE="/tmp/shs_demo_mission_log.csv"
+INPUT_FILE = "files/simulation_input.xlsx"
 
 
 # Parse command line arguments
@@ -21,12 +24,12 @@ parser.add_argument("--icons", action="store_true", help="Use icons in place of 
 args = parser.parse_args()
 
 
-nodes = LocationsData.from_csv(args.nodes, args.verbose)
+nodes = LocationsData.from_xlsx(INPUT_FILE, args.verbose)
 if args.mission_log:
     routing = RoutingData.from_csv(args.mission_log, args.verbose)
 else:
     print("Loading simulation data ...")
-    sim = Simulation.from_xlsx("files/simulation_input.xlsx")
+    sim = Simulation.from_xlsx(INPUT_FILE)
     dataform = DataInputWindow(sim)
     dataform.run()
 
