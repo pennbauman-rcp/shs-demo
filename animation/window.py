@@ -1,7 +1,7 @@
 import tkinter
 from tkinter import ttk
 
-from data.parse import *
+from animation.data import *
 from animation.canvas import MapCanvas
 from animation.panels import *
 from animation.objects import *

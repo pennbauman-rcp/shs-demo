@@ -1,22 +1,20 @@
 #!/bin/env python3
 import argparse
-import tkinter
 
 from animation.window import WorldMap
-from data.parse import *
+from animation.data import *
 from data.inputform import DataInputWindow
 from simulator.frontend import SelfHealingSimulation
 
 
-
-TMP_FILE="/tmp/shs_demo_mission_log.csv"
-INPUT_FILE = "files/simulation_input.xlsx"
+TMP_FILE="/tmp/shs_demo_mission_log"
+INPUT_FILE = "files/simulation_input_planes.xlsx"
 
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(prog='SHS Demo')
-parser.add_argument("-n", "--nodes", default="files/airports_icao.csv", help="CSV file containing location node definitions")
-parser.add_argument("-l", "--mission-log", help="CSV file containing mission events")
+parser.add_argument("-x", "--input-xlsx", default=INPUT_FILE, help="XLSX file containing simulation input definitions")
+parser.add_argument("-l", "--movement-log", help="Pickle file containing mission events")
 parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed information")
 parser.add_argument("-s", "--speed", type=int, default=1, help="Animation speed, a integer between 1 and 20 ")
 parser.add_argument("--style", choices=["light", "dark", "satellite"], help="Animation style and color scheme")
@@ -24,9 +22,9 @@ parser.add_argument("--icons", action="store_true", help="Use icons in place of 
 args = parser.parse_args()
 
 
-nodes = LocationsData.from_xlsx(INPUT_FILE, args.verbose)
-if args.mission_log:
-    routing = RoutingData.from_csv(args.mission_log, args.verbose)
+nodes = LocationsData.from_xlsx(args.input_xlsx, args.verbose)
+if args.movement_log:
+    routing = RoutingData.from_pickle(args.movement_log, args.verbose)
 else:
     print("Loading simulation data ...")
     sim = SelfHealingSimulation(INPUT_FILE)
@@ -36,9 +34,9 @@ else:
     sim.set_vehicle_counts(dataform.get_vehicles())
     print("Running simulation ...")
     sim.run()
-    sim.save_to_csv(TMP_FILE)
+    sim.save_to_files(TMP_FILE)
 
-    routing = RoutingData.from_csv(TMP_FILE, args.verbose)
+    routing = RoutingData.from_pickle(TMP_FILE + ".pkl", args.verbose)
 
 
 print("Running animation ...")

@@ -1,16 +1,17 @@
 import sys
 import csv
+import pickle
 import re
 import pandas as pd
 
 
-MOVE_REGEX = re.compile("[Ll]eaving from [-_ a-zA-Z]+, (driv|sail|mov|fly|go)ing to [-_ a-zA-Z]+")
 DIRECTION_SIGN_KEY = {
     "N":  1, "n":  1,
     "S": -1, "s": -1,
     "E":  1, "e":  1,
     "W": -1, "w": -1,
 }
+
 
 # Convert degrees minutes seconds notation to float degrees
 def dms2float(dms: str) -> float:
@@ -84,6 +85,7 @@ def parse_coord(coord: str) -> tuple[float, float]:
 
 
 
+
 class LocationsData:
     def __init__(self):
         self.nodes = []
@@ -100,27 +102,6 @@ class LocationsData:
         return self.iter
     def __next__(self):
         return self.iter.__next__()
-
-    @staticmethod
-    def from_csv(filename: str, verbose: bool = False):
-        if verbose:
-            print("Reading locations from CSV (%s)" % filename)
-        self = LocationsData()
-        with open(filename, newline='') as csvfile:
-            csvreader = csv.reader(csvfile, dialect='excel')
-            row_i = 1
-            for row in csvreader:
-                # Check header row
-                if row_i == 1:
-                    row_i += 1
-                    if row[0] != "ICAO":
-                        print("ERROR: Invalid CSV header for locations")
-                        print(row)
-                        sys.exit(1)
-                    continue
-                self.nodes.append(self.Node.from_csv(row))
-                row_i += 1
-        return self
 
     @staticmethod
     def from_xlsx(filename: str, verbose: bool = False):
@@ -154,6 +135,7 @@ class LocationsData:
 
 
 
+
 class RoutingData:
     def __init__(self):
         self.event_log = []
@@ -172,41 +154,38 @@ class RoutingData:
         return self.iter.__next__()
 
     @staticmethod
-    def from_csv(filename: str, verbose: bool = False):
+    def from_pickle(filename: str, verbose: bool = False):
         if verbose:
             print("Reading mission log from CSV (%s)" % filename)
         self = RoutingData()
-        with open(filename, newline='') as csvfile:
-            csvreader = csv.reader(csvfile, dialect='excel')
-            row_i = 1
-            for row in csvreader:
-                # Check header row
-                if row_i == 1:
-                    row_i += 1
-                    if row[1] != "vehicle id":
-                        print("ERROR: Invalid CSV header for mission log")
-                        print(row)
-                        sys.exit(1)
-                    continue
-                self.event_log.append(self.RoutingEvent.from_csv(row))
-                row_i += 1
+        with open(filename, "rb") as f:
+            data = pickle.load(f)
+        for d in data:
+            if not d["Vehicle_name"]:
+                continue
+            self.event_log.append(self.RoutingEvent.from_dict(d))
         return self
 
     def get_legs(self) -> list[tuple[str, str]]:
         ret = []
+        vehicles = {}
         for e in self.event_log:
-            if MOVE_REGEX.match(e.event):
-                start = e.event.split(",")[0][13:]
-                i = 0
-                spaces = 0
-                for c in e.event.split(",")[1]:
-                    if c == " ":
-                        spaces += 1
-                    i += 1
-                    if spaces == 3:
-                        break
-                end = e.event.split(",")[1][i:]
-                ret.append((start, end))
+            if e.event == "taking off":
+                if e.vehicle_id in vehicles:
+                    raise ValueError("Vehicle leaing again without arriving '%s'" % e.vehicle_id)
+                vehicles[e.vehicle_id] = e.location
+            elif e.event == "arriving":
+                if not e.vehicle_id in vehicles:
+                    if e.time == 0.0:
+                        continue
+                    print(e)
+                    raise ValueError("Vehicle arriving without leaving '%s'" % e.vehicle_id)
+                ret.append((vehicles[e.vehicle_id], e.location))
+                vehicles.pop(e.vehicle_id)
+            elif e.event == "loading cargo":
+                continue
+            else:
+                raise ValueError("Unknown event '%s'" % e.event)
         return ret
 
     def get_vehicles(self) -> list:
@@ -244,14 +223,15 @@ class RoutingData:
             return "T%04.1f: %s @ %s (%s)" % (self.time, self.vehicle_id, self.location, self.event)
 
         @staticmethod
-        def from_csv(row: list[str]):
+        def from_dict(data: dict):
             self = RoutingData.RoutingEvent()
-            self.vehicle_id = row[1]
-            self.vehicle_model = row[2]
-            self.event = row[3]
-            self.time = float(row[4])
-            self.location = row[5]
+            self.vehicle_id = data["Vehicle_name"]
+            self.vehicle_model = self.vehicle_id.split(" ")[0]
+            self.event = data["event"]
+            self.time = data["time"]
+            self.location = data["location"]
             return self
+
 
     class RoutingVehicle:
         vehicle_id = ""
@@ -273,3 +253,78 @@ class RoutingData:
                     break
                 i += 1
             self.moves.insert(i, (time, location))
+
+
+
+
+class CargoData:
+    def __init__(self):
+        self.init = {}
+        self.levels = {}
+
+    @staticmethod
+    def from_pickle(file: str):
+        with open("movement_log.pkl", "rb") as f:
+            data = pickle.load(f)
+        # log = CargoData.EventLog()
+        events = {}
+
+        for d in data:
+            if d["Cargo"] == "empty":
+                continue
+            if d["event"] == "taking off" or d["event"] == "arriving":
+                # log.add_event(d)
+                event = CargoData.Event(d)
+                if event.location in events:
+                    events[event.location].append(event)
+                else:
+                    events[event.location] = [event]
+
+        ret = CargoData()
+        # Get starting levels for nodes
+        ret.init = {}
+        for node in events:
+            current = {"PAX": 0, "cargo": 0}
+            minimum = {"PAX": 0, "cargo": 0}
+            for e in events[node]:
+                if e.move_type == "arriving":
+                    current[e.cargo_type] += e.quantity
+                elif e.move_type == "taking off":
+                    current[e.cargo_type] -= e.quantity
+                else:
+                    raise ValueError("Unknown move type '%s'" % (e.move_type))
+                if current[e.cargo_type] < minimum[e.cargo_type]:
+                    minimum[e.cargo_type] = current[e.cargo_type]
+            ret.init[node] = {}
+            for t in minimum:
+                ret.init[node][t] = -1 * minimum[t]
+        # Calculate levels over time
+        ret.levels = {}
+        for node in events:
+            ret.levels[node] = []
+            current = ret.init[node]
+            for e in events[node]:
+                if e.move_type == "arriving":
+                    current[e.cargo_type] += e.quantity
+                elif e.move_type == "taking off":
+                    current[e.cargo_type] -= e.quantity
+                else:
+                    raise ValueError("Unknown move type '%s'" % (e.move_type))
+                ret.levels[node].append(CargoData.CargoLevels(e.time, current))
+        return ret
+
+    class CargoLevels:
+        def __init__(self, time, levels):
+            self.time = time
+            self.levels = levels["PAX"]
+
+    class Event:
+        def __init__(self, log):
+            self.time = log["time"]
+            self.location = log["location"].split("_")[0]
+            self.move_type = log["event"]
+            self.cargo_type = log["Cargo"][0]["c_type"]
+            self.quantity = log["Cargo"][0]["cargo_moved"]
+
+        def __str__(self):
+            return "%02.3f %s %s [%s %s]" % (self.time, self.location, self.move_type, self.cargo_type, self.quantity)
