@@ -263,8 +263,10 @@ class CargoData:
         self.levels = {}
 
     @staticmethod
-    def from_pickle(file: str):
-        with open("movement_log.pkl", "rb") as f:
+    def from_pickle(filename: str, verbose: bool = False):
+        if verbose:
+            print("Reading mission log from CSV (%s)" % filename)
+        with open(filename, "rb") as f:
             data = pickle.load(f)
         # log = CargoData.EventLog()
         events = {}
@@ -272,51 +274,61 @@ class CargoData:
         for d in data:
             if d["Cargo"] == "empty":
                 continue
-            if d["event"] == "taking off" or d["event"] == "arriving":
-                # log.add_event(d)
-                event = CargoData.Event(d)
-                if event.location in events:
-                    events[event.location].append(event)
-                else:
-                    events[event.location] = [event]
+            event = CargoData.Event(d)
+            if event.location in events:
+                events[event.location].append(event)
+            else:
+                events[event.location] = [event]
 
         ret = CargoData()
         # Get starting levels for nodes
-        ret.init = {}
+        init = {}
         for node in events:
             current = {"PAX": 0, "cargo": 0}
-            minimum = {"PAX": 0, "cargo": 0}
+            minimum = dict(current)
             for e in events[node]:
                 if e.move_type == "arriving":
                     current[e.cargo_type] += e.quantity
                 elif e.move_type == "taking off":
+                    current[e.cargo_type] -= e.quantity
+                elif e.move_type == "loading cargo":
                     current[e.cargo_type] -= e.quantity
                 else:
                     raise ValueError("Unknown move type '%s'" % (e.move_type))
                 if current[e.cargo_type] < minimum[e.cargo_type]:
                     minimum[e.cargo_type] = current[e.cargo_type]
-            ret.init[node] = {}
+            init[node] = {}
             for t in minimum:
-                ret.init[node][t] = -1 * minimum[t]
+                init[node][t] = abs(minimum[t])
         # Calculate levels over time
         ret.levels = {}
+        ret.maximums = dict(init)
         for node in events:
             ret.levels[node] = []
-            current = ret.init[node]
+            current = dict(init[node])
+            ret.levels[node].append(CargoData.CargoLevels(e.time, current))
             for e in events[node]:
                 if e.move_type == "arriving":
                     current[e.cargo_type] += e.quantity
                 elif e.move_type == "taking off":
                     current[e.cargo_type] -= e.quantity
+                elif e.move_type == "loading cargo":
+                    current[e.cargo_type] -= e.quantity
                 else:
                     raise ValueError("Unknown move type '%s'" % (e.move_type))
-                ret.levels[node].append(CargoData.CargoLevels(e.time, current))
+                level = CargoData.CargoLevels(e.time, current)
+                ret.levels[node].append(level)
+                for t in ret.maximums[node]:
+                    ret.maximums[node][t] = max(ret.maximums[node][t], current[t])
         return ret
 
     class CargoLevels:
         def __init__(self, time, levels):
             self.time = time
-            self.levels = levels["PAX"]
+            self.levels = dict(levels)
+
+        def __str__(self):
+            return "T%02.3f %s" % (self.time, str(self.levels))
 
     class Event:
         def __init__(self, log):

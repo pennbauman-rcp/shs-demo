@@ -14,7 +14,7 @@ class WorldMap:
     paused = False
     speed = 1
 
-    def __init__(self, nodes: LocationsData = None, routing: RoutingData = None):
+    def __init__(self, nodes: LocationsData = None, routing: RoutingData = None, cargo: CargoData = None):
         self.canvas = MapCanvas()
         self.graphs = []
         self.nodes = []
@@ -32,6 +32,8 @@ class WorldMap:
             for v in routing.get_vehicles():
                 self.vehicles.append(MapVehicle(v.vehicle_id, v.model, v.moves))
             self.end_time = routing.get_end_time()
+        self.cargo_data = cargo
+
 
     # Crop in map to show 1/4 of earth
     def crop(self, min_lat: int, min_lon: int):
@@ -41,8 +43,8 @@ class WorldMap:
     def style(self, style_name: str, icons: bool):
         self.canvas.set_style(style_name, icons)
 
-    def add_graph(self):
-        graph = MapGraph(35, 80, 30, 20)
+    def add_vehicle_graph(self):
+        graph = BarGraph(35, 80, 30, 20)
         graph.layout({
                 "title": "Vehicle Utilization",
                 "bars": ["Loading", "Moving", "Done"],
@@ -56,6 +58,23 @@ class WorldMap:
             })
         graph.data_source(self.get_vehicle_usage)
         self.graphs.append(graph)
+
+    def add_cargo_piechart(self, node, lat, lon):
+        piechart = PieChart(node, self.cargo_data, lat, lon)
+        piechart.layout({
+                "title": "Cargo at " + node,
+                "pies": {
+                        "PAX": "Passengers",
+                        "cargo": "Cargo",
+                        "out": "Over Out",
+                    },
+                "colors": {
+                        "PAX": self.canvas.style.vehicles["Ship"],
+                        "cargo": self.canvas.style.vehicles["Train"],
+                        "out": self.canvas.style.vehicles["Train"],
+                    },
+            })
+        self.graphs.append(piechart)
 
     def get_vehicle_usage(self) -> dict[str, list[int]]:
         vehicle_index = {"Airplane": 0, "Ship": 1, "Train": 2, "Truck": 3}
@@ -162,6 +181,8 @@ class WorldMap:
         self.key.display(self.canvas)
         for g in self.graphs:
             g.display(self.canvas)
+        if verbose:
+            print("Graphs displayed (%d)" % len(self.graphs))
 
         # Print vehicle counts
         tmp = self.get_vehicle_usage()
@@ -190,7 +211,7 @@ class WorldMap:
         for v in self.vehicles:
             v.step(self.canvas, self.time)
         for g in self.graphs:
-            g.step(self.canvas)
+            g.step(self.time)
 
         if self.time <= self.end_time:
             self.tk.after(10, self.step)

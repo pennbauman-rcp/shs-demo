@@ -1,6 +1,6 @@
 import pytest
 import math
-from parse import *
+from data import *
 
 # Helper function to compare floats
 def approx_eq_floats(a: float, b: float) -> bool:
