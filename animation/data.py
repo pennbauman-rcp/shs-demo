@@ -157,14 +157,19 @@ class RoutingData:
     def from_pickle(filename: str, verbose: bool = False):
         if verbose:
             print("Reading mission log from CSV (%s)" % filename)
-        self = RoutingData()
         with open(filename, "rb") as f:
             data = pickle.load(f)
+        return RoutingData.from_object(data)
+
+    @staticmethod
+    def from_object(data):
+        ret = RoutingData()
         for d in data:
             if not d["Vehicle_name"]:
                 continue
-            self.event_log.append(self.RoutingEvent.from_dict(d))
-        return self
+            ret.event_log.append(RoutingData.RoutingEvent.from_dict(d))
+        return ret
+
 
     def get_legs(self) -> list[tuple[str, str]]:
         ret = []
@@ -268,9 +273,11 @@ class CargoData:
             print("Reading mission log from CSV (%s)" % filename)
         with open(filename, "rb") as f:
             data = pickle.load(f)
-        # log = CargoData.EventLog()
-        events = {}
+        return CargoData.from_object(data)
 
+    @staticmethod
+    def from_object(data):
+        events = {}
         for d in data:
             if d["Cargo"] == "empty":
                 continue

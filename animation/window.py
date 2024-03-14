@@ -60,6 +60,8 @@ class WorldMap:
         self.graphs.append(graph)
 
     def add_cargo_piechart(self, node, lat, lon):
+        if not node in self.cargo_data.levels:
+            return
         piechart = PieChart(node, self.cargo_data, lat, lon)
         piechart.layout({
                 "title": "Cargo at " + node,
@@ -89,7 +91,7 @@ class WorldMap:
 
 
     # Run map display window
-    def run(self, speed: int, verbose: bool = False):
+    def run(self, speed: int = 1, verbose: bool = False):
         self.verbose = verbose
         if speed > 20:
             if speed > 100:
