@@ -15,17 +15,13 @@ def run_manager(xlsx, directory, cmd_queue, in_queue):
 
 def edit_sim(name, data, cmd_queue):
     win = InputWindow(data, name, cmd_queue)
-    (name, data) = win.display()
-    cmd_queue.put(("new_sim", name, data))
+    win.display()
 
 def display_sim(data):
-    nodes = LocationsData.from_xlsx(data.xlsx)
-    routing = RoutingData.from_object(data.output)
-    cargo = CargoData.from_object(data.output)
-
-    world = WorldMap(nodes, routing, cargo)
+    world = WorldMap(data.xlsx, data.output)
     world.crop(-5, -120)
     world.style("satellite", False)
+    world.add_cargo_charts()
     world.run()
 
 

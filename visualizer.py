@@ -17,20 +17,16 @@ args = parser.parse_args()
 
 
 print("Loading animation data ...")
-nodes = LocationsData.from_xlsx(args.input_xlsx, args.verbose)
-routing = RoutingData.from_pickle(args.movement_log, args.verbose)
-cargo = CargoData.from_pickle(args.movement_log, args.verbose)
+with open(args.movement_log, "rb") as f:
+    log = pickle.load(f)
+world = WorldMap(args.input_xlsx, log)
+
+
+world.crop(-5, -120)
+world.style(args.style, args.icons)
+# world.add_vehicle_graph()
+world.add_cargo_charts()
 
 
 print("Running animation ...")
-world = WorldMap(nodes, routing, cargo)
-world.crop(-5, -120)
-world.style(args.style, args.icons)
-world.add_cargo_piechart("KFCS", 60, -100)
-world.add_cargo_piechart("KBGR", 70, -60)
-world.add_cargo_piechart("KGRK", 10, -90)
-world.add_cargo_piechart("LERT", 10, -15)
-world.add_cargo_piechart("ETAD", 70, -15)
-world.add_cargo_piechart("ETAR", 20, 30)
-world.add_cargo_piechart("EPKK", 70, 30)
 world.run(args.speed, args.verbose)

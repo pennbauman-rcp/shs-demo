@@ -2,6 +2,7 @@ import sys
 import csv
 import pickle
 import re
+from operator import attrgetter
 import pandas as pd
 
 
@@ -187,7 +188,7 @@ class RoutingData:
                     raise ValueError("Vehicle arriving without leaving '%s'" % e.vehicle_id)
                 ret.append((vehicles[e.vehicle_id], e.location))
                 vehicles.pop(e.vehicle_id)
-            elif e.event == "loading cargo":
+            elif e.event == "loading cargo" or e.event == "Unloading cargo":
                 continue
             else:
                 raise ValueError("Unknown event '%s'" % e.event)
@@ -291,15 +292,19 @@ class CargoData:
         # Get starting levels for nodes
         init = {}
         for node in events:
-            current = {"PAX": 0, "cargo": 0}
+            current = {
+                    "PAX": 0, # passengers
+                    "cargo": 0, # short tons
+                    "out": 0, # sq ft
+                }
             minimum = dict(current)
             for e in events[node]:
                 if e.move_type == "arriving":
                     current[e.cargo_type] += e.quantity
                 elif e.move_type == "taking off":
                     current[e.cargo_type] -= e.quantity
-                elif e.move_type == "loading cargo":
-                    current[e.cargo_type] -= e.quantity
+                elif e.move_type == "loading cargo" or e.move_type == "Unloading cargo":
+                    pass
                 else:
                     raise ValueError("Unknown move type '%s'" % (e.move_type))
                 if current[e.cargo_type] < minimum[e.cargo_type]:
@@ -313,20 +318,22 @@ class CargoData:
         for node in events:
             ret.levels[node] = []
             current = dict(init[node])
-            ret.levels[node].append(CargoData.CargoLevels(e.time, current))
+            ret.levels[node].append(CargoData.CargoLevels(0, current))
             for e in events[node]:
                 if e.move_type == "arriving":
                     current[e.cargo_type] += e.quantity
                 elif e.move_type == "taking off":
                     current[e.cargo_type] -= e.quantity
-                elif e.move_type == "loading cargo":
-                    current[e.cargo_type] -= e.quantity
+                elif e.move_type == "loading cargo" or e.move_type == "Unloading cargo":
+                    pass
                 else:
                     raise ValueError("Unknown move type '%s'" % (e.move_type))
                 level = CargoData.CargoLevels(e.time, current)
                 ret.levels[node].append(level)
                 for t in ret.maximums[node]:
                     ret.maximums[node][t] = max(ret.maximums[node][t], current[t])
+        for n in ret.levels:
+            ret.levels[n].sort(key=attrgetter("time"))
         return ret
 
     class CargoLevels:

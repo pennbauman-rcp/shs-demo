@@ -7,15 +7,31 @@ from animation.data import *
 from animation.canvas import MapCanvas, ICON_SIZE
 
 
-# Clock for the corner of the map
-class WorldClock:
-    def display(self, world: MapCanvas):
-        x, y = world.coord.calc_percent_px(99, 98)
-        self.canvas_text = world.canvas.create_text(x, y, fill=world.style.text, text="T%.3f" % 0.0, anchor=tkinter.SE)
 
-    def step(self, world: MapCanvas, time: float):
-        world.canvas.itemconfig(self.canvas_text, text="T%.3f" % time)
+# Timeline bar display position in the simulation output
+class TimelineBar:
+    def __init__(self, max_time):
+        self.max_time = max_time
 
+    def display(self, canvas: MapCanvas):
+        self.canvas = canvas
+        self.cursor_w = canvas.coord.scale * 5
+        self.cursor_h = canvas.coord.scale * 25
+        self.cursor_max = canvas.coord.px_width_full - self.cursor_w
+        p1 = (0, canvas.coord.px_height_full - self.cursor_h)
+        p2 = (canvas.coord.px_width_full, canvas.coord.px_height_full)
+        self.bar = self.canvas.canvas.create_rectangle(p1, p2, fill="black", outline="black")
+        self._draw_cursor(0.0)
+
+    def _draw_cursor(self, time: float):
+        pos = self.cursor_max * time / self.max_time
+        p1 = (pos, self.canvas.coord.px_height_full - self.cursor_h)
+        p2 = (pos + self.cursor_w, self.canvas.coord.px_height_full)
+        self.cursor = self.canvas.canvas.create_rectangle(p1, p2, fill="white", outline="white")
+
+    def step(self, time: float):
+        self.canvas.canvas.delete(self.cursor)
+        self._draw_cursor(time)
 
 
 # On map key for vehicle types
@@ -27,12 +43,12 @@ class VehicleKey:
         self.canvas_texts = [None] * 4
         for i in range(0, 4):
             if world.style.icons:
-                x, y = world.coord.calc_percent_px(1 + 0.5*ICON_SIZE, 92 - 4*ICON_SIZE + (2 + ICON_SIZE)*i)
+                x, y = world.coord.calc_percent_px(1 + 0.5*ICON_SIZE, 90 - 4*ICON_SIZE + (2 + ICON_SIZE)*i)
                 self.icon_images[i] = tkinter.PhotoImage(file=world.style.get_icon_file(vehicles[i]))
                 self.canvas_icons[i] = world.canvas.create_image(x, y, image=self.icon_images[i])
                 self.canvas_texts[i] = world.canvas.create_text(x + world.style.vehicle_radius * (2 + 2*ICON_SIZE), y, fill=world.style.text, text=vehicles[i], anchor=tkinter.W)
             else:
-                x, y = world.coord.calc_percent_px(1, 92 + 2*i)
+                x, y = world.coord.calc_percent_px(1, 90 + 2*i)
                 p1 = (x - world.style.vehicle_radius, y - world.style.vehicle_radius)
                 p2 = (x + world.style.vehicle_radius, y + world.style.vehicle_radius)
                 color = world.style.vehicles[vehicles[i]]
@@ -155,7 +171,6 @@ class PieChart:
         if index == self.cached_level_index:
             return self.cached_level
         level = self.levels[index]
-        print("T%02.3f %s %s %s" % (time, self.node, str(level), str(self.maximums)))
         self.cached_level_index = index
         self.cached_level = level
         return level
@@ -183,7 +198,7 @@ class PieChart:
         # Draw line to base
         self.canvas_line = canvas.canvas.create_line((self.x_px, self.y_px), canvas.get_named_px(self.node), fill=canvas.style.text, width=canvas.style.line_width)
 
-        self.pie_r = 6*canvas.style.font_px
+        self.pie_r = 4*canvas.style.font_px
         self.w_px = self.pie_r * len(self.maximums) * 3
         self.h_px = self.pie_r * 3 + 3*canvas.style.font_px
         p1 = (self.x_px - self.w_px/2, self.y_px - self.h_px/2)
@@ -212,3 +227,4 @@ class PieChart:
         for p in self.canvas_pies:
             self.canvas.canvas.delete(p)
         self.draw_pies(level)
+

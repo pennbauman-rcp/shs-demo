@@ -9,6 +9,7 @@ MAP_SCALES = [
     (1800,  900, 1),
 ]
 ICON_SIZE = 1 # 1 or 2
+DYNAMIC_LEG_DISPLAY = False
 
 
 class MapCanvas:
@@ -155,7 +156,7 @@ class WorldStyle:
         if map_style:
             self.map = map_style
         else:
-            self.map = "light"
+            self.map = "satellite"
         self.icons = icons
         # Determine colors
         if self.map == "light":

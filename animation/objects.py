@@ -3,7 +3,7 @@ import tkinter
 from tkinter import ttk
 from tkinter import font
 
-from animation.canvas import MapCanvas, ICON_SIZE
+from animation.canvas import MapCanvas, ICON_SIZE, DYNAMIC_LEG_DISPLAY
 
 
 AIRPLANE_REGEX = re.compile("^(plane|C17|B777)$")
@@ -47,6 +47,8 @@ class MapLeg:
         self.end_node = end_node
 
     def display(self, canvas: MapCanvas):
+        if DYNAMIC_LEG_DISPLAY:
+            return
         p1 = canvas.get_named_px(self.start_node)
         p2 = canvas.get_named_px(self.end_node)
         self.canvas_line = canvas.canvas.create_line(p1, p2, fill=canvas.style.text, width=canvas.style.line_width)
@@ -59,6 +61,7 @@ class MapVehicle:
     moves = [] # (time: float, loc: str)
     icon_img = None
     canvas_icon = None
+    canvas_line = None
     cached_time_index = -9
     cached_px_index = -9
     cached_usage_index = -9
@@ -127,6 +130,8 @@ class MapVehicle:
         x = int(p1[0] + (p2[0] - p1[0])*ratio)
         y = int(p1[1] + (p2[1] - p1[1])*ratio)
         # print("T%4.1f: %f (%f, %f)" %(time, ratio, self.moves[i][0], self.moves[i + 1][0]))
+        if DYNAMIC_LEG_DISPLAY:
+            self.canvas_line = self.canvas.canvas.create_line(p1, p2, fill=self.canvas.style.text, width=self.canvas.style.line_width)
         return (x, y)
 
     # Get what a vehicle is doing at a given time
@@ -181,8 +186,10 @@ class MapVehicle:
             self.draw(loc)
 
     # Update vehicle on canvas for current time
-    def step(self, world: MapCanvas, time: float):
-        loc = self.get_location_at(time, world)
+    def step(self, canvas: MapCanvas, time: float):
+        if DYNAMIC_LEG_DISPLAY:
+            self.canvas.canvas.delete(self.canvas_line)
+        loc = self.get_location_at(time, canvas)
         if loc == self.current_loc:
             return
         self.current_loc = loc

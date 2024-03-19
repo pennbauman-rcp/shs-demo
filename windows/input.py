@@ -5,6 +5,8 @@ from windows.data import SimGUIInputs
 import windows.style
 
 class InputWindow:
+    submitted = False
+
     def __init__(self, data, name, cmd_queue):
         if not type(data) is SimGUIInputs:
             raise ValueError("InputWindow requires SimGUIInputs")
@@ -60,15 +62,14 @@ class InputWindow:
         ttk.Frame(self.tk, height=20, style="OutBox.TFrame").pack()
 
         self.tk.mainloop()
-        return (self.name, self.data)
 
     def submit(self):
         success = True
         for n in self.nodes:
             success = success and n.submit()
             self.data.nodes[n.data.icao] = n.data
-            self.name = self.name_entry.get()
         if success:
+            self.cmd_queue.put(("new_sim", self.name_entry.get(), self.data))
             self.tk.quit()
             self.tk.destroy()
 
